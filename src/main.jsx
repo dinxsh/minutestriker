@@ -441,7 +441,10 @@ function App() {
           <header className="match-hero">
             <nav className="topbar" aria-label="Match controls">
               <div className="brand">
-                <span className="logo-mark">M</span>
+                <span className="logo-mark" aria-hidden="true">
+                  <span className="logo-mi">mi</span>
+                  <span className="logo-bolt" />
+                </span>
                 <span>mineetes</span>
               </div>
               <div className={match.connected ? "live-pill" : "live-pill offline"}>

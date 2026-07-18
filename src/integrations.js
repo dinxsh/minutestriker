@@ -145,7 +145,14 @@ async function fetchJson(url, apiKey, extraHeaders = {}) {
   });
 
   if (!response.ok) {
-    throw new Error(`Live feed returned ${response.status}`);
+    let message = `Live feed returned ${response.status}`;
+    try {
+      const payload = await response.json();
+      message = payload?.error?.message || message;
+    } catch {
+      // Keep the status-based message when the response is not JSON.
+    }
+    throw new Error(message);
   }
 
   return response.json();

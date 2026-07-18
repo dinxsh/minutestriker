@@ -125,7 +125,7 @@ export function handleApiError(response, error) {
 function requireConfiguredTxLine() {
   const config = getServerConfig();
   if (!config.configured) {
-    throw httpError(503, `Missing backend env: ${config.missing.join(", ")}`);
+    throw httpError(503, `Missing backend env: ${config.missing.join(", ")}`, true);
   }
   return config;
 }
@@ -142,7 +142,7 @@ async function txLineFetch(config, path) {
   });
 
   if (!response.ok) {
-    throw httpError(response.status, `TxLINE returned ${response.status}`);
+    throw httpError(response.status, `TxLINE returned ${response.status}`, true);
   }
 
   return response.json();
@@ -167,10 +167,10 @@ function listFrom(value) {
   return [value];
 }
 
-function httpError(statusCode, message) {
+function httpError(statusCode, message, expose = statusCode < 500) {
   const error = new Error(message);
   error.statusCode = statusCode;
-  error.expose = statusCode < 500;
+  error.expose = expose;
   return error;
 }
 
