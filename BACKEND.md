@@ -38,13 +38,33 @@ Use the TxLINE docs:
 - World Cup free tier: https://txline.txodds.com/documentation/worldcup
 - Runnable devnet examples: https://txline.txodds.com/documentation/examples/devnet-examples
 
+Local setup:
+
+```bash
+npm.cmd run txline:setup
+```
+
+This writes `.env.local`, selects mainnet World Cup service level `12`, and fetches a guest JWT from `POST https://txline.txodds.com/auth/guest/start`. To use delayed free data instead, run:
+
+```bash
+npm.cmd run txline:setup -- --service-level=1
+```
+
+For devnet:
+
+```bash
+npm.cmd run txline:setup -- --network=devnet --service-level=1
+```
+
 Flow:
 
 1. Connect/fund the wallet required by TxLINE.
-2. Start guest auth to get `TXLINE_JWT`.
-3. Subscribe/activate the token for the relevant service level.
-4. Store the activated token as `TXLINE_API_TOKEN`.
-5. Redeploy Vercel so the serverless API routes receive the envs.
+2. Run `npm.cmd run txline:setup` to write the network, origin, service level, and guest JWT.
+3. Submit the TxLINE on-chain `subscribe` transaction for the same network and service level.
+4. Sign the exact activation message `txSig::TXLINE_JWT` with the subscribing wallet.
+5. Activate the token at `POST https://txline.txodds.com/api/token/activate`.
+6. Store the activated token as `TXLINE_API_TOKEN` in `.env.local` and Vercel.
+7. Restart local dev or redeploy Vercel so API routes receive the envs.
 
 Devnet notes:
 
