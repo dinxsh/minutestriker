@@ -7,6 +7,7 @@ import {
   ChevronDown,
   Clock3,
   Coins,
+  ExternalLink,
   Flame,
   Gauge,
   Lock,
@@ -77,6 +78,20 @@ const questions = [
 ];
 
 const initialFeed = [];
+const txLineSetupLinks = [
+  {
+    label: "World Cup free tier",
+    href: "https://txline.txodds.com/documentation/worldcup",
+  },
+  {
+    label: "Quickstart",
+    href: "https://txline.txodds.com/documentation/quickstart",
+  },
+  {
+    label: "Devnet examples",
+    href: "https://txline.txodds.com/documentation/examples/devnet-examples",
+  },
+];
 
 const formatMoney = (value) => (Number.isFinite(value) ? value : 0).toFixed(2);
 const formatWallet = (address) => (address ? `${address.slice(0, 4)}...${address.slice(-4)}` : "");
@@ -132,6 +147,7 @@ function App() {
   const remaining = inActionWindow ? 30 - second : 60 - second;
   const progress = Math.min(100, (second / 60) * 100);
   const marketReady = Boolean(readiness.configured && selectedFixtureId && match.connected);
+  const setupBlocked = !marketReady;
   const renderedQuestionText = question.text
     .replace("{next}", minute + 1)
     .replace("{home}", match.homeName)
@@ -453,26 +469,36 @@ function App() {
               </div>
             </nav>
 
-            <div className="scoreline">
-              <Team name={match.homeName} sublabel="Possession" stat={`${stats.homePossession}%`} />
-              <div className="score">
-                {match.homeScore}-{match.awayScore}
-              </div>
-              <Team name={match.awayName} sublabel="Shots" stat={stats.awayShots} align="right" />
-            </div>
+            {marketReady ? (
+              <>
+                <div className="scoreline">
+                  <Team name={match.homeName} sublabel="Possession" stat={`${stats.homePossession}%`} />
+                  <div className="score">
+                    {match.homeScore}-{match.awayScore}
+                  </div>
+                  <Team name={match.awayName} sublabel="Shots" stat={stats.awayShots} align="right" />
+                </div>
 
-            <div className="ticker">
-              <div className="minute">
-                <strong>{minute}'</strong>
-                <span>{phaseCopy}</span>
+                <div className="ticker">
+                  <div className="minute">
+                    <strong>{minute}'</strong>
+                    <span>{phaseCopy}</span>
+                  </div>
+                  <div className="balance-card">
+                    <span>{wallet ? "Wallet" : "Balance"}</span>
+                    <strong>
+                      {wallet ? formatWallet(wallet) : `${formatMoney(balance)} USDC`}
+                    </strong>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <div className="txline-gate">
+                <span>Production data required</span>
+                <strong>Connect TxLINE before markets open</strong>
+                <p>No fixture, scoreline, timer market, or balance is shown until a real TxLINE snapshot succeeds.</p>
               </div>
-              <div className="balance-card">
-                <span>{wallet ? "Wallet" : "Balance"}</span>
-                <strong>
-                  {wallet ? formatWallet(wallet) : `${formatMoney(balance)} USDC`}
-                </strong>
-              </div>
-            </div>
+            )}
           </header>
 
           <section className="play-stack">
@@ -508,8 +534,22 @@ function App() {
               <p className="session-note secondary">
                 {wallet
                   ? "Connected wallet is used for identity; treasury custody must be configured before accepting real funds."
-                  : "Free World Cup access still needs wallet subscription, SOL fees, guest JWT, and token activation."}
+                  : "Get credentials from TxLINE: subscribe with your Solana wallet, request guest JWT, sign txSig::jwt, then activate the API token."}
               </p>
+              {!readiness.configured ? (
+                <div className="setup-guide" aria-label="Where to get TxLINE credentials">
+                  <div>
+                    <strong>Where to get JWT + token</strong>
+                    <span>World Cup free tier: service level 1 delayed or 12 real-time. Needs SOL for subscription fees.</span>
+                  </div>
+                  {txLineSetupLinks.map((link) => (
+                    <a href={link.href} key={link.href} rel="noreferrer" target="_blank">
+                      {link.label}
+                      <ExternalLink size={13} />
+                    </a>
+                  ))}
+                </div>
+              ) : null}
               <div className="readiness-panel" aria-label="TxLINE readiness">
                 <StatusChip label="Network" value={readiness.network} tone="ok" />
                 <StatusChip label="Level" value={readiness.serviceLevel} tone="ok" />
@@ -530,6 +570,7 @@ function App() {
               ) : null}
             </section>
 
+            {setupBlocked ? <ProductionGateCard readiness={readiness} /> : (
             <article className={`cycle-card ${inActionWindow ? "is-action" : "is-sweat"}`}>
               <div className="phase-row">
                 <span>{inActionWindow ? "00s-30s prediction" : "30s-60s sweat"}</span>
@@ -611,6 +652,7 @@ function App() {
                 </button>
               </div>
             </article>
+            )}
 
             <SettlementCard settlement={settlement} />
             <FeedCard feed={feed} />
@@ -690,6 +732,32 @@ function Team({ name, sublabel, stat, align = "left" }) {
         {sublabel} <b>{stat}</b>
       </span>
     </div>
+  );
+}
+
+function ProductionGateCard({ readiness }) {
+  return (
+    <article className="production-gate-card">
+      <div className="phase-row">
+        <span>Markets closed</span>
+        <strong>Live only</strong>
+      </div>
+      <div className="production-gate-body">
+        <ShieldCheck size={24} />
+        <div>
+          <h1>Live TxLINE only</h1>
+          <p>
+            mineetes opens the prediction card only after TxLINE credentials are configured,
+            fixtures load, and a live score snapshot poll succeeds.
+          </p>
+        </div>
+      </div>
+      <div className="env-list">
+        <code>TXLINE_JWT</code>
+        <code>TXLINE_API_TOKEN</code>
+        <code>TXLINE_SERVICE_LEVEL={readiness.serviceLevel}</code>
+      </div>
+    </article>
   );
 }
 

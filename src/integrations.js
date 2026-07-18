@@ -27,8 +27,8 @@ export const initialMatchSnapshot = {
   source: "TxLINE required",
   connected: false,
   fixtureId: TXLINE_FIXTURE_ID || "",
-  homeName: "Home",
-  awayName: "Away",
+  homeName: "",
+  awayName: "",
   homeScore: 0,
   awayScore: 0,
   minute: 0,
@@ -235,7 +235,7 @@ export function normalizeFixture(item) {
 
   return {
     fixtureId: String(fixtureId),
-    label: `${home.name ?? item.home_name ?? "Home"} vs ${away.name ?? item.away_name ?? "Away"}`,
+    label: `${home.name ?? item.home_name ?? "Unlisted home"} vs ${away.name ?? item.away_name ?? "Unlisted away"}`,
     status: item.status ?? item.Status ?? "scheduled",
   };
 }
