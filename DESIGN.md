@@ -23,8 +23,8 @@ mineetes is a mobile-first live football arcade. The first thing users should no
 
 ## Required States
 - Loading fixtures: setup strip says "Loading matches" and disables fixture select.
-- No fixtures: show a warm state explaining demo mode is still available.
-- TxLINE auth/feed error: show visible fallback message, not silent demo switching.
+- No fixtures: show a clear closed-market state until TxLINE returns a live fixture.
+- TxLINE auth/feed error: show visible configuration or feed failure messages.
 - Wallet unavailable: toast instructs user to install a Solana wallet.
 - Wallet connected: label wallet as identity only unless a real vault is connected.
 - Settlement pending: show locked state from 30s to 60s.

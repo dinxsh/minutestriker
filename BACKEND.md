@@ -21,7 +21,6 @@ Set these in Vercel Project Settings -> Environment Variables for Production and
 Optional:
 
 - `TXLINE_FIXTURE_ID`: pin the app to one fixture instead of choosing from `/api/fixtures`.
-- `VITE_WORLDCUP_API_KEY`: browser-side fallback only; leave unset for the TxLINE backend path.
 
 Devnet activation/script variables from the runnable examples:
 
@@ -52,7 +51,7 @@ Devnet notes:
 - Use `TXLINE_NETWORK=devnet` with `TXLINE_ORIGIN=https://txline-dev.txodds.com`.
 - Keep the wallet network, Solana RPC, TxLINE program, guest JWT host, and activation endpoint on devnet together.
 - Use service level `1` for current devnet free-tier examples.
-- The docs' fixed `fixtureId` and `seq` pairs are demo data. For production-style settlement, derive `fixtureId`, `seq`, phase, and status from observed score snapshots, updates, historical data, or streams.
+- The docs' fixed `fixtureId` and `seq` pairs are example values. For production settlement, derive `fixtureId`, `seq`, phase, and status from observed score snapshots, updates, historical data, or streams.
 
 Score validation notes:
 

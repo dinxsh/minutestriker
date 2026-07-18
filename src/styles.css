@@ -201,7 +201,7 @@ button:disabled {
   animation: pulseLive 1.4s ease-in-out infinite;
 }
 
-.live-pill.demo {
+.live-pill.offline {
   background: var(--yellow);
   animation: none;
 }
@@ -412,7 +412,6 @@ button:disabled {
   background: #ffe6ef;
 }
 
-.status-chip.demo,
 .status-chip.idle {
   background: var(--yellow);
 }

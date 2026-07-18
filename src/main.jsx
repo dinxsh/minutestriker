@@ -19,7 +19,6 @@ import {
   Zap,
 } from "lucide-react";
 import {
-  advanceDemoSnapshotMinute,
   fetchFixtures,
   fetchLiveMatchSnapshot,
   fetchTxLineReadiness,
@@ -66,23 +65,18 @@ const questions = [
   },
   {
     category: "Possession",
-    text: "Will USA retain more possession than BRA this minute?",
+    text: "Will {home} retain more possession than {away} this minute?",
     context:
-      "Short-pass tempo has increased after the equalizer, but Brazil are pressing aggressively.",
-    yes: "USA possession edge",
-    no: "Brazil possession edge",
+      "Short-pass tempo has increased while the live feed reports the current possession split.",
+    yes: "{home} possession edge",
+    no: "{away} possession edge",
     rule: "YES if home possession is greater than or equal to 50 at settlement",
     statOnly: true,
     match: (_event, snapshot) => snapshot.homePossession >= 50,
   },
 ];
 
-const initialFeed = [
-  { minute: "64:12", label: "midfield duel" },
-  { minute: "64:21", label: "progressive pass" },
-  { minute: "64:34", label: "pressure event" },
-  { minute: "64:46", label: "clearance" },
-];
+const initialFeed = [];
 
 const formatMoney = (value) => (Number.isFinite(value) ? value : 0).toFixed(2);
 const formatWallet = (address) => (address ? `${address.slice(0, 4)}...${address.slice(-4)}` : "");
@@ -137,6 +131,13 @@ function App() {
   const inActionWindow = second < 30;
   const remaining = inActionWindow ? 30 - second : 60 - second;
   const progress = Math.min(100, (second / 60) * 100);
+  const marketReady = Boolean(readiness.configured && selectedFixtureId && match.connected);
+  const renderedQuestionText = question.text
+    .replace("{next}", minute + 1)
+    .replace("{home}", match.homeName)
+    .replace("{away}", match.awayName);
+  const renderCopy = (value) =>
+    String(value).replace("{home}", match.homeName).replace("{away}", match.awayName);
 
   const showToast = (message) => {
     setToast(message);
@@ -179,13 +180,18 @@ function App() {
   const placePick = (nextPick) => {
     if (locked || !inActionWindow) return;
 
+    if (!marketReady) {
+      showToast("TxLINE live market is not ready");
+      return;
+    }
+
     if (!Number.isFinite(stake) || stake <= 0) {
       showToast("Enter a stake above 0 USDC");
       return;
     }
 
     if (balance < stake) {
-      showToast("Stake exceeds demo balance");
+      showToast("Stake exceeds available balance");
       return;
     }
 
@@ -205,7 +211,7 @@ function App() {
       tone: nextPick === "YES" ? "yes" : "no",
       icon: nextPick === "YES" ? "Y" : "N",
       title: `${nextPick} locked`,
-      body: `${formatMoney(stake)} USDC committed in the demo ledger for minute ${minute}.`,
+      body: `${formatMoney(stake)} USDC committed for minute ${minute}.`,
       payout: "Live",
     });
     showToast(`${nextPick} locked for ${formatMoney(stake)} USDC`);
@@ -238,7 +244,7 @@ function App() {
             tone: won ? "won" : "lost",
             icon: won ? "+" : "-",
             title: won ? "Prediction won" : "Prediction missed",
-            body: resolution.answer === "YES" ? wager.question.yes : wager.question.no,
+            body: renderCopy(resolution.answer === "YES" ? wager.question.yes : wager.question.no),
             payout: won ? `+${formatMoney(payout)} USDC` : `-${formatMoney(wager.stake)}`,
             receipt: resolution.receipt,
           }
@@ -246,7 +252,7 @@ function App() {
             tone: "idle",
             icon: "-",
             title: "Minute skipped",
-            body: "No demo-ledger prediction was locked before the action window closed.",
+            body: "No prediction was locked before the action window closed.",
             payout: "--",
             receipt: resolution.receipt,
           },
@@ -257,12 +263,6 @@ function App() {
 
   const advanceMinute = () => {
     setSecond(0);
-    setMatch((value) => {
-      const nextMatch = advanceDemoSnapshotMinute(value);
-      matchRef.current = nextMatch;
-      setMinute(nextMatch.minute);
-      return nextMatch;
-    });
     setQuestionIndex((value) => value + 1);
     setPick(null);
     setLockedWager(null);
@@ -306,8 +306,8 @@ function App() {
       setFixturesLoading(false);
       setFixturesError("");
       setLastPoll({
-        tone: readiness.configured ? "ok" : "demo",
-        label: readiness.configured ? "Fixtures live" : "Demo fixtures",
+        tone: "ok",
+        label: "Fixtures live",
         detail: nextFixtures.length ? `${nextFixtures.length} fixture option loaded` : "No fixture rows returned",
       });
       if (!selectedFixtureId && nextFixtures[0]?.fixtureId) {
@@ -322,11 +322,7 @@ function App() {
         label: "Fixture error",
         detail: error.message,
       });
-      setFixtures([{
-        fixtureId: initialMatchSnapshot.fixtureId,
-        label: `${initialMatchSnapshot.homeName} vs ${initialMatchSnapshot.awayName}`,
-        status: "demo",
-      }]);
+      setFixtures([]);
     });
 
     return () => {
@@ -347,8 +343,8 @@ function App() {
 
         setLiveError("");
         setLastPoll({
-          tone: snapshot.connected ? "ok" : "demo",
-          label: snapshot.connected ? "TxLINE live" : "Demo poll",
+          tone: snapshot.connected ? "ok" : "error",
+          label: snapshot.connected ? "TxLINE live" : "Snapshot unavailable",
           detail: `${snapshot.source} at minute ${snapshot.minute ?? "n/a"}`,
         });
         matchRef.current = snapshot;
@@ -412,8 +408,8 @@ function App() {
     }
   }, [second]);
 
-  const controlsDisabled = locked || !inActionWindow;
-  const phaseCopy = inActionWindow ? "Action window open" : "Sweat window locked";
+  const controlsDisabled = locked || !inActionWindow || !marketReady;
+  const phaseCopy = marketReady ? (inActionWindow ? "Action window open" : "Sweat window locked") : "TxLINE unavailable";
   const statusCards = useMemo(
     () => [
       {
@@ -448,7 +444,7 @@ function App() {
                 <span className="logo-mark">M</span>
                 <span>mineetes</span>
               </div>
-              <div className={match.connected ? "live-pill" : "live-pill demo"}>
+              <div className={match.connected ? "live-pill" : "live-pill offline"}>
                 {match.connected ? <Wifi size={14} /> : <WifiOff size={14} />}
                 {match.source}
               </div>
@@ -484,7 +480,7 @@ function App() {
               </button>
 
               <label className="fixture-picker">
-                <span>{fixturesLoading ? "Loading matches" : readiness.configured ? "TxLINE fixture" : "Demo fixture"}</span>
+                <span>{fixturesLoading ? "Loading matches" : "TxLINE fixture"}</span>
                 <select
                   aria-label="Select match fixture"
                   disabled={fixturesLoading || fixtures.length === 0}
@@ -504,11 +500,11 @@ function App() {
               <p className="session-note">
                 {readiness.configured
                   ? `${readiness.network} feed credentials present at service level ${readiness.serviceLevel}.`
-                  : `Missing ${readiness.missing.join(" and ")}; demo ledger stays active.`}
+                  : `Missing ${readiness.missing.join(" and ")}; live markets remain closed.`}
               </p>
               <p className="session-note secondary">
                 {wallet
-                  ? "Connected wallet is used for identity only; stakes settle in the demo ledger."
+                  ? "Connected wallet is used for identity; treasury custody must be configured before accepting real funds."
                   : "Free World Cup access still needs wallet subscription, SOL fees, guest JWT, and token activation."}
               </p>
               <div className="readiness-panel" aria-label="TxLINE readiness">
@@ -516,17 +512,17 @@ function App() {
                 <StatusChip label="Level" value={readiness.serviceLevel} tone="ok" />
                 <StatusChip label="JWT" value={readiness.hasGuestJwt ? "Present" : "Missing"} tone={readiness.hasGuestJwt ? "ok" : "warn"} />
                 <StatusChip label="Token" value={readiness.hasApiToken ? "Present" : "Missing"} tone={readiness.hasApiToken ? "ok" : "warn"} />
-                <StatusChip label="Fixture" value={readiness.configured ? "TxLINE" : "Demo"} tone={readiness.configured ? "ok" : "demo"} />
+                <StatusChip label="Fixture" value={selectedFixtureId ? "Selected" : "Missing"} tone={selectedFixtureId ? "ok" : "warn"} />
                 <StatusChip label="Last Poll" value={lastPoll.label} tone={lastPoll.tone} />
               </div>
               {fixturesError || liveError ? (
                 <p className="state-note" role="status">
-                  {fixturesError || liveError}. Demo mode remains available.
+                  {fixturesError || liveError}. Configure TxLINE before opening markets.
                 </p>
               ) : null}
               {!fixturesLoading && fixtures.length === 0 ? (
                 <p className="state-note" role="status">
-                  No live fixtures found. Use demo mode while waiting for TxLINE matches.
+                  No TxLINE fixtures returned. Markets stay closed until a live fixture is available.
                 </p>
               ) : null}
             </section>
@@ -549,7 +545,7 @@ function App() {
 
               <div className="question-block">
                 <span className="category">{question.category}</span>
-                <h1>{question.text.replace("{next}", minute + 1)}</h1>
+                <h1>{renderedQuestionText}</h1>
                 <p>{question.context}</p>
               </div>
 
@@ -725,12 +721,24 @@ function SettlementCard({ settlement }) {
               <strong>{settlement.receipt.sequence}</strong>
             </div>
             <div>
+              <span>Locked Seq</span>
+              <strong>{settlement.receipt.lockedSequence}</strong>
+            </div>
+            <div>
+              <span>Events</span>
+              <strong>{settlement.receipt.eventCount}</strong>
+            </div>
+            <div>
               <span>Source</span>
               <strong>{settlement.receipt.source}</strong>
             </div>
             <div>
               <span>Fixture</span>
               <strong>{settlement.receipt.fixtureId}</strong>
+            </div>
+            <div>
+              <span>Locked Fixture</span>
+              <strong>{settlement.receipt.lockedFixtureId}</strong>
             </div>
             <div className="receipt-rule">
               <span>Rule</span>
@@ -748,7 +756,13 @@ function FeedCard({ feed }) {
     <article className="feed-card">
       <h2>Live Match Feed</h2>
       <div className="feed-list">
-        {feed
+        {feed.length === 0 ? (
+          <div className="feed-item empty">
+            <strong>--:--</strong>
+            <span>Waiting for TxLINE events</span>
+          </div>
+        ) : (
+          feed
           .slice(-5)
           .reverse()
           .map((item, index) => (
@@ -756,7 +770,8 @@ function FeedCard({ feed }) {
               <strong>{item.minute}</strong>
               <span>{item.label}</span>
             </div>
-          ))}
+          ))
+        )}
       </div>
     </article>
   );

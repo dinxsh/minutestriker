@@ -15,20 +15,20 @@ Source listing: https://superteam.fun/earn/listing/prediction-markets-and-settle
 | On-chain proof integrations | `/api/score-validation` proxies TxLINE legacy `statKey` and current V2 `statKeys` proof endpoints for future Solana validation. |
 | Frontend | Mobile-first React/Vite match companion UI with fixture selection, wallet identity, staking, timer, settlement, and proof disclosure. |
 | Backend | Vercel serverless API routes keep `TXLINE_JWT` and `TXLINE_API_TOKEN` server-side. |
-| Blockchain | Wallet identity is integrated; backend exposes TxLINE score-validation proof data. Real stake custody remains explicitly demo-ledger scoped. |
+| Blockchain | Wallet identity is integrated; backend exposes TxLINE score-validation proof data. Treasury custody must be connected before accepting real funds. |
 | Mobile | Primary layout is a phone-frame responsive experience with touch-sized controls. |
 | Design | Comic/arcade visual system documented in `DESIGN.md`, with visible state and accessibility rules. |
 
 ## Honest Scope Boundary
 
-mineetes is a hackathon prototype, not production wagering infrastructure. Real-money custody, compliance, KYC/geofencing, and audited Solana escrow are intentionally out of scope. The app demonstrates prediction-market creation, event-driven resolution, and proof-ready settlement using TxLINE data.
+mineetes ships the live-data and settlement-proof path for the hackathon build. Real-money custody, compliance, KYC/geofencing, and audited Solana escrow must be completed before public wagering launch.
 
-## Demo Flow
+## Production Flow
 
 1. Open the app on mobile or desktop.
-2. Confirm TxLINE readiness chips show configured backend state or demo fallback.
+2. Confirm TxLINE readiness chips show configured backend state and a successful live poll.
 3. Select a fixture.
-4. Enter any positive stake within the demo ledger balance.
+4. Enter any positive stake within the available balance.
 5. Lock YES/NO during the 00s-30s market-open window.
 6. Watch the 30s-60s frozen market window.
 7. Inspect the settlement receipt and proof details.

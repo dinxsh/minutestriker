@@ -169,9 +169,9 @@ test("normalizes TxLINE snapshots with stats, score, status, and event updates",
 });
 
 test("normalizes TxLINE snapshots with missing fields by preserving previous values", () => {
-  const snapshot = normalizeTxLine({}, null, initialMatchSnapshot, "fallback-fixture");
+  const snapshot = normalizeTxLine({}, null, initialMatchSnapshot, "configured-fixture");
 
-  assert.equal(snapshot.fixtureId, "fallback-fixture");
+  assert.equal(snapshot.fixtureId, "configured-fixture");
   assert.equal(snapshot.homeName, initialMatchSnapshot.homeName);
   assert.equal(snapshot.awayName, initialMatchSnapshot.awayName);
   assert.equal(snapshot.homeScore, initialMatchSnapshot.homeScore);

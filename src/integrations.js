@@ -6,7 +6,6 @@ const TXLINE_ORIGIN = stripTrailingSlash(
 );
 const TXLINE_FIXTURE_ID = env.VITE_TXLINE_FIXTURE_ID;
 const TXLINE_SERVICE_LEVEL = env.VITE_TXLINE_SERVICE_LEVEL || "12";
-const WORLDCUP_API_KEY = env.VITE_WORLDCUP_API_KEY;
 
 export const txLineNetworkConfig = {
   network: TXLINE_NETWORK,
@@ -24,33 +23,25 @@ export const txLineNetworkConfig = {
       : "Zhw9TVKp68a1QrftncMSd6ELXKDtpVMNuMGr1jNwdeL",
 };
 
-const demoEvents = [
-  { type: "shot", label: "shot attempt registered", minute: 64, second: 8 },
-  { type: "free_kick", label: "free kick awarded", minute: 64, second: 17 },
-  { type: "duel", label: "duel won", minute: 64, second: 24 },
-  { type: "corner", label: "corner pressure rising", minute: 64, second: 39 },
-  { type: "yellow_card", label: "yellow card check", minute: 64, second: 51 },
-];
-
 export const initialMatchSnapshot = {
-  source: "Demo Engine",
+  source: "TxLINE required",
   connected: false,
-  fixtureId: TXLINE_FIXTURE_ID || "demo-fixture",
-  homeName: "USA",
-  awayName: "BRA",
-  homeScore: 1,
-  awayScore: 1,
-  minute: 64,
-  status: "IN PLAY",
-  homePossession: 51,
-  awayShots: 7,
-  attacks: 23,
-  duels: 41,
-  corners: 5,
-  cards: 2,
-  events: demoEvents,
-  latestEvent: "simulated TxLINE-style event stream",
-  sequence: 1001,
+  fixtureId: TXLINE_FIXTURE_ID || "",
+  homeName: "Home",
+  awayName: "Away",
+  homeScore: 0,
+  awayScore: 0,
+  minute: 0,
+  status: "WAITING",
+  homePossession: 0,
+  awayShots: 0,
+  attacks: 0,
+  duels: 0,
+  corners: 0,
+  cards: 0,
+  events: [],
+  latestEvent: "",
+  sequence: "n/a",
   raw: null,
   lastUpdated: new Date().toISOString(),
 };
@@ -60,12 +51,8 @@ export function txLineConfigured() {
 }
 
 export async function fetchFixtures() {
-  try {
-    const payload = await fetchJson("/api/fixtures");
-    return payload.fixtures?.length ? payload.fixtures : [];
-  } catch {
-    return [snapshotToFixture(initialMatchSnapshot)];
-  }
+  const payload = await fetchJson("/api/fixtures");
+  return payload.fixtures?.length ? payload.fixtures : [];
 }
 
 export function buildActivationMessage({ txSig, jwt, leagues = [] }) {
@@ -93,35 +80,12 @@ export async function fetchTxLineReadiness() {
 export async function fetchLiveMatchSnapshot({ fixtureId, previous = initialMatchSnapshot } = {}) {
   const activeFixtureId = fixtureId || TXLINE_FIXTURE_ID || previous.fixtureId;
 
-  if (activeFixtureId && activeFixtureId !== "demo-fixture") {
-    try {
-      const payload = await fetchJson(`/api/live?fixtureId=${encodeURIComponent(activeFixtureId)}`);
-      return payload.snapshot;
-    } catch {
-      // Local Vite dev and missing backend envs should keep the arcade demo usable.
-    }
+  if (!activeFixtureId) {
+    throw new Error("Select a TxLINE fixture before polling live match data");
   }
 
-  if (WORLDCUP_API_KEY && WORLDCUP_API_KEY !== "replace_with_worldcupapi_key") {
-    const payload = await fetchJson(
-      `https://api.worldcupapi.com/livescores?key=${encodeURIComponent(WORLDCUP_API_KEY)}`,
-    );
-    return normalizeWorldCupApi(payload, previous);
-  }
-
-  return simulateSnapshot(previous);
-}
-
-export function advanceDemoSnapshotMinute(previous = initialMatchSnapshot) {
-  if (previous.connected) return previous;
-  return {
-    ...previous,
-    minute: (previous.minute || initialMatchSnapshot.minute) + 1,
-    events: (previous.events || []).map((event) => ({
-      ...event,
-      minute: (previous.minute || initialMatchSnapshot.minute) + 1,
-    })),
-  };
+  const payload = await fetchJson(`/api/live?fixtureId=${encodeURIComponent(activeFixtureId)}`);
+  return payload.snapshot;
 }
 
 export function resolvePrediction({ question, pick, stake, snapshot, targetMinute }) {
@@ -221,53 +185,6 @@ export function normalizeTxLine(snapshotPayload, updatesPayload, previous = init
   };
 }
 
-function normalizeWorldCupApi(payload, previous) {
-  const match = Array.isArray(payload) ? payload[0] : payload?.data?.[0] ?? payload;
-  if (!match) return simulateSnapshot(previous);
-
-  return {
-    ...previous,
-    source: "WorldCup API Live",
-    connected: true,
-    homeName: match.home?.name ?? previous.homeName,
-    awayName: match.away?.name ?? previous.awayName,
-    homeScore: numberFrom(match.home_score ?? match.home?.score, previous.homeScore),
-    awayScore: numberFrom(match.away_score ?? match.away?.score, previous.awayScore),
-    minute: numberFrom(match.time, previous.minute),
-    status: match.status ?? previous.status,
-    latestEvent: match.last_changed ? `score feed changed ${match.last_changed}` : previous.latestEvent,
-    lastUpdated: new Date().toISOString(),
-  };
-}
-
-function simulateSnapshot(previous) {
-  const tick = new Date();
-  const nextEvent = demoEvents[Math.floor(Math.random() * demoEvents.length)];
-  const minute = previous.minute || 64;
-  const event = {
-    ...nextEvent,
-    minute,
-    second: new Date().getSeconds(),
-    sequence: (previous.sequence || 1000) + 1,
-  };
-
-  return {
-    ...previous,
-    source: "Demo Engine",
-    connected: false,
-    homePossession: clamp(previous.homePossession + (Math.random() > 0.5 ? 1 : -1), 35, 65),
-    awayShots: previous.awayShots + (event.type === "shot" ? 1 : 0),
-    attacks: previous.attacks + (Math.random() > 0.45 ? 1 : 0),
-    duels: previous.duels + (event.type === "duel" ? 1 : 0),
-    corners: previous.corners + (event.type === "corner" ? 1 : 0),
-    cards: previous.cards + (event.type.includes("card") ? 1 : 0),
-    events: [...(previous.events || []).slice(-30), event],
-    latestEvent: event.label,
-    sequence: event.sequence,
-    lastUpdated: tick.toISOString(),
-  };
-}
-
 function resolveQuestion(question, events, snapshot) {
   if (question.statOnly) return question.match({}, snapshot) ? "YES" : "NO";
   return events.some((event) => question.match(event, snapshot)) ? "YES" : "NO";
@@ -316,14 +233,6 @@ export function normalizeFixture(item) {
   };
 }
 
-function snapshotToFixture(snapshot) {
-  return {
-    fixtureId: snapshot.fixtureId,
-    label: `${snapshot.homeName} vs ${snapshot.awayName}`,
-    status: snapshot.status,
-  };
-}
-
 function firstMatch(payload) {
   return Array.isArray(payload) ? payload[0] : payload?.match ?? payload?.data?.[0] ?? payload?.data ?? payload;
 }
@@ -346,13 +255,9 @@ function statValue(stats, key) {
   return undefined;
 }
 
-function numberFrom(value, fallback) {
+function numberFrom(value, defaultValue) {
   const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : fallback;
-}
-
-function clamp(value, min, max) {
-  return Math.min(max, Math.max(min, value));
+  return Number.isFinite(parsed) ? parsed : defaultValue;
 }
 
 function eventLabel(event) {
