@@ -412,6 +412,63 @@ button:disabled {
   box-shadow: 5px 5px 0 #050507;
 }
 
+.wallet-chooser {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  padding: 9px;
+  color: #050507;
+  background: #dff9ff;
+  border: 3px solid #050507;
+  border-radius: 6px;
+  box-shadow: 2px 2px 0 #050507;
+}
+
+.wallet-chooser > strong {
+  grid-column: 1 / -1;
+  font-size: 12px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.wallet-option {
+  min-height: 48px;
+  display: grid;
+  gap: 2px;
+  padding: 8px;
+  color: #050507;
+  background: #ffe6ef;
+  border: 3px solid #050507;
+  border-radius: 6px;
+  box-shadow: 2px 2px 0 #050507;
+  text-align: left;
+}
+
+.wallet-option.available {
+  background: var(--lime);
+}
+
+.wallet-option span,
+.wallet-option small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wallet-option span {
+  font-size: 12px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.wallet-option small {
+  color: #3d3945;
+  font-size: 10px;
+  font-weight: 800;
+}
+
 .fixture-picker {
   min-width: 0;
   padding: 0;
@@ -1404,6 +1461,10 @@ button:disabled {
   }
 
   .session-strip {
+    grid-template-columns: 1fr;
+  }
+
+  .wallet-chooser {
     grid-template-columns: 1fr;
   }
 

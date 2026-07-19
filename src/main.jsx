@@ -104,6 +104,8 @@ function App() {
   const [stake, setStake] = useState(1);
   const [balance, setBalance] = useState(42.5);
   const [wallet, setWallet] = useState(null);
+  const [walletName, setWalletName] = useState("");
+  const [walletChooserOpen, setWalletChooserOpen] = useState(false);
   const [match, setMatch] = useState(initialMatchSnapshot);
   const [fixtures, setFixtures] = useState([]);
   const [fixturesLoading, setFixturesLoading] = useState(true);
@@ -176,18 +178,22 @@ function App() {
     ]);
   };
 
-  const connectWallet = async () => {
-    const provider = window.solana;
+  const walletOptions = getWalletOptions();
+
+  const connectWallet = async (option) => {
+    const provider = option.provider;
 
     if (!provider?.connect) {
-      showToast("Install Phantom or a Solana wallet");
+      showToast(`${option.name} is not available in this browser`);
       return;
     }
 
     try {
       const response = await provider.connect();
       setWallet(response.publicKey.toString());
-      showToast("Wallet connected");
+      setWalletName(option.name);
+      setWalletChooserOpen(false);
+      showToast(`${option.name} connected`);
     } catch {
       showToast("Wallet connection cancelled");
     }
@@ -503,9 +509,9 @@ function App() {
 
           <section className="play-stack">
             <section className="session-strip" aria-label="Session setup">
-              <button className="wallet-button" onClick={connectWallet} type="button">
+              <button className="wallet-button" onClick={() => setWalletChooserOpen((value) => !value)} type="button">
                 <Wallet size={17} />
-                {wallet ? "Wallet connected" : "Connect wallet"}
+                {wallet ? `${walletName || "Wallet"} connected` : "Choose wallet"}
               </button>
 
               <label className="fixture-picker">
@@ -536,6 +542,22 @@ function App() {
                   ? "Connected wallet is used for identity; treasury custody must be configured before accepting real funds."
                   : "Get credentials from TxLINE: subscribe with your Solana wallet, request guest JWT, sign txSig::jwt, then activate the API token."}
               </p>
+              {walletChooserOpen ? (
+                <div className="wallet-chooser" aria-label="Choose Solana wallet">
+                  <strong>Choose Solana wallet</strong>
+                  {walletOptions.map((option) => (
+                    <button
+                      className={option.provider ? "wallet-option available" : "wallet-option"}
+                      key={option.name}
+                      onClick={() => option.provider ? connectWallet(option) : showToast(`${option.name} not detected`)}
+                      type="button"
+                    >
+                      <span>{option.name}</span>
+                      <small>{option.provider ? "Available" : option.hint}</small>
+                    </button>
+                  ))}
+                </div>
+              ) : null}
               {!readiness.configured ? (
                 <div className="setup-guide" aria-label="Where to get TxLINE credentials">
                   <div>
@@ -733,6 +755,36 @@ function Team({ name, sublabel, stat, align = "left" }) {
       </span>
     </div>
   );
+}
+
+function getWalletOptions() {
+  const browserWindow = typeof window === "undefined" ? {} : window;
+  const solana = browserWindow.solana;
+  const metamaskSolana = browserWindow.ethereum?.providers?.find?.((provider) => provider.isMetaMask && provider.solana)
+    ?.solana ?? browserWindow.ethereum?.solana;
+
+  return [
+    {
+      name: "MetaMask Solana",
+      provider: metamaskSolana || (solana?.isMetaMask ? solana : null),
+      hint: "Open MetaMask Solana account",
+    },
+    {
+      name: "Phantom",
+      provider: browserWindow.phantom?.solana || (solana?.isPhantom ? solana : null),
+      hint: "Install Phantom",
+    },
+    {
+      name: "Solflare",
+      provider: browserWindow.solflare || (solana?.isSolflare ? solana : null),
+      hint: "Install Solflare",
+    },
+    {
+      name: "Backpack",
+      provider: browserWindow.backpack || (solana?.isBackpack ? solana : null),
+      hint: "Install Backpack",
+    },
+  ];
 }
 
 function ProductionGateCard({ readiness }) {
