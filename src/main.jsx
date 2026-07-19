@@ -26,7 +26,6 @@ import {
   resolvePrediction,
   txLineNetworkConfig,
 } from "./integrations";
-import { subscribeAndActivateWorldCup } from "./txline/subscribe";
 import "./styles.css";
 
 const questions = [
@@ -203,6 +202,7 @@ function App() {
 
     setActivatingTxLine(true);
     try {
+      const { subscribeAndActivateWorldCup } = await import("./txline/subscribe");
       const result = await subscribeAndActivateWorldCup({ provider: walletProvider, readiness });
       const nextReadiness = result.activation?.readiness || await fetchTxLineReadiness();
       setReadiness(nextReadiness);
@@ -725,32 +725,45 @@ function Team({ name, sublabel, stat, align = "left" }) {
 
 function getWalletOptions() {
   const browserWindow = typeof window === "undefined" ? {} : window;
-  const solana = browserWindow.solana;
-  const metamaskSolana = browserWindow.ethereum?.providers?.find?.((provider) => provider.isMetaMask && provider.solana)
-    ?.solana ?? browserWindow.ethereum?.solana;
+  const solana = safeRead(() => browserWindow.solana);
+  const phantom = safeRead(() => browserWindow.phantom?.solana) || (safeRead(() => solana?.isPhantom) ? solana : null);
+  const solflare = safeRead(() => browserWindow.solflare) || (safeRead(() => solana?.isSolflare) ? solana : null);
+  const backpack = safeRead(() => browserWindow.backpack) || (safeRead(() => solana?.isBackpack) ? solana : null);
+  const metamaskSolana =
+    safeRead(() => browserWindow.ethereum?.solana) ||
+    safeRead(() => browserWindow.ethereum?.providers?.find?.((provider) => provider?.isMetaMask && provider?.solana)?.solana) ||
+    (safeRead(() => solana?.isMetaMask) ? solana : null);
 
   return [
     {
-      name: "MetaMask Solana",
-      provider: metamaskSolana || (solana?.isMetaMask ? solana : null),
-      hint: "Open MetaMask Solana account",
-    },
-    {
       name: "Phantom",
-      provider: browserWindow.phantom?.solana || (solana?.isPhantom ? solana : null),
+      provider: phantom,
       hint: "Install Phantom",
     },
     {
       name: "Solflare",
-      provider: browserWindow.solflare || (solana?.isSolflare ? solana : null),
+      provider: solflare,
       hint: "Install Solflare",
     },
     {
       name: "Backpack",
-      provider: browserWindow.backpack || (solana?.isBackpack ? solana : null),
+      provider: backpack,
       hint: "Install Backpack",
     },
+    {
+      name: "MetaMask Solana",
+      provider: metamaskSolana,
+      hint: "Open MetaMask Solana account",
+    },
   ];
+}
+
+function safeRead(read) {
+  try {
+    return read();
+  } catch {
+    return null;
+  }
 }
 
 function SettlementCard({ settlement }) {
