@@ -143,7 +143,6 @@ button:disabled {
 .decision-row,
 .result,
 .feed-item,
-.metrics-panel header,
 .rail-item {
   display: flex;
   align-items: center;
@@ -154,8 +153,7 @@ button:disabled {
 .phase-row,
 .timer-label,
 .stake-label,
-.feed-item,
-.metrics-panel header {
+.feed-item {
   justify-content: space-between;
 }
 
@@ -214,8 +212,7 @@ button:disabled {
 }
 
 .live-pill,
-.eyebrow,
-.oracle-chip {
+.eyebrow {
   display: inline-flex;
   align-items: center;
   gap: 7px;
@@ -513,7 +510,7 @@ button:disabled {
   text-transform: none;
 }
 
-.setup-guide {
+.activation-card {
   grid-column: 1 / -1;
   display: grid;
   grid-template-columns: 1fr;
@@ -526,36 +523,33 @@ button:disabled {
   box-shadow: 2px 2px 0 #050507;
 }
 
-.setup-guide div {
+.activation-card div {
   display: grid;
   gap: 3px;
 }
 
-.setup-guide strong,
-.setup-guide span {
+.activation-card strong,
+.activation-card span {
   display: block;
 }
 
-.setup-guide strong {
+.activation-card strong {
   font-size: 12px;
   font-weight: 900;
   text-transform: uppercase;
 }
 
-.setup-guide span {
+.activation-card span {
   color: #3d3945;
   font-size: 11px;
   font-weight: 800;
   line-height: 1.35;
 }
 
-.setup-guide a {
-  min-height: 34px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
+.activation-card code {
+  min-width: 0;
   padding: 7px 9px;
+  overflow: hidden;
   color: #050507;
   background: var(--yellow);
   border: 3px solid #050507;
@@ -563,60 +557,8 @@ button:disabled {
   box-shadow: 2px 2px 0 #050507;
   font-size: 11px;
   font-weight: 900;
-  text-decoration: none;
-  text-transform: uppercase;
-}
-
-.readiness-panel {
-  grid-column: 1 / -1;
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 7px;
-}
-
-.status-chip {
-  min-width: 0;
-  padding: 7px;
-  color: #050507;
-  background: #fffdf2;
-  border: 3px solid #050507;
-  border-radius: 6px;
-  box-shadow: 2px 2px 0 #050507;
-}
-
-.status-chip.ok {
-  background: var(--lime);
-}
-
-.status-chip.warn,
-.status-chip.error {
-  background: #ffe6ef;
-}
-
-.status-chip.idle {
-  background: var(--yellow);
-}
-
-.status-chip span,
-.status-chip strong {
-  display: block;
-  overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.status-chip span {
-  color: #3d3945;
-  font-size: 9px;
-  font-weight: 900;
-  text-transform: uppercase;
-}
-
-.status-chip strong {
-  margin-top: 2px;
-  color: #050507;
-  font-size: 11px;
-  font-weight: 900;
 }
 
 .state-note {
@@ -632,7 +574,6 @@ button:disabled {
 .settlement-card,
 .feed-card,
 .status-card,
-.metrics-panel,
 .architecture-panel {
   position: relative;
   background: var(--panel);
@@ -660,7 +601,6 @@ button:disabled {
 .settlement-card::after,
 .feed-card::after,
 .status-card::after,
-.metrics-panel::after,
 .architecture-panel::after {
   content: "";
   position: absolute;
@@ -973,7 +913,6 @@ button:disabled {
 
 .settlement-card h2,
 .feed-card h2,
-.metrics-panel h2,
 .architecture-panel h2 {
   position: relative;
   z-index: 1;
@@ -1243,50 +1182,8 @@ button:disabled {
   line-height: 1.45;
 }
 
-.metrics-panel,
 .architecture-panel {
   padding: 18px;
-}
-
-.oracle-chip {
-  position: relative;
-  z-index: 1;
-  padding: 7px 10px;
-  color: #050507;
-  background: var(--pink);
-  box-shadow: 3px 3px 0 #050507;
-}
-
-.metrics-grid {
-  position: relative;
-  z-index: 1;
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 10px;
-  margin-top: 12px;
-}
-
-.metric {
-  padding: 13px;
-  background: #fffdf2;
-  border: 3px solid #050507;
-  border-radius: 6px;
-  box-shadow: 3px 3px 0 #050507;
-}
-
-.metric span {
-  display: block;
-  color: #3d3945;
-  font-size: 12px;
-  font-weight: 900;
-  text-transform: uppercase;
-}
-
-.metric strong {
-  display: block;
-  margin-top: 6px;
-  color: #050507;
-  font-size: 24px;
 }
 
 .rail-item {
@@ -1386,8 +1283,7 @@ button:disabled {
     display: none;
   }
 
-  .status-grid,
-  .metrics-grid {
+  .status-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
@@ -1470,10 +1366,6 @@ button:disabled {
 
   .receipt-grid {
     grid-template-columns: 1fr;
-  }
-
-  .readiness-panel {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .txline-gate strong {

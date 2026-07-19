@@ -1,13 +1,11 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
-  Activity,
   BadgeDollarSign,
   Check,
   ChevronDown,
   Clock3,
   Coins,
-  ExternalLink,
   Flame,
   Gauge,
   Lock,
@@ -109,14 +107,8 @@ function App() {
   const [match, setMatch] = useState(initialMatchSnapshot);
   const [fixtures, setFixtures] = useState([]);
   const [fixturesLoading, setFixturesLoading] = useState(true);
-  const [fixturesError, setFixturesError] = useState("");
   const [selectedFixtureId, setSelectedFixtureId] = useState(initialMatchSnapshot.fixtureId);
   const [liveError, setLiveError] = useState("");
-  const [lastPoll, setLastPoll] = useState({
-    tone: "idle",
-    label: "Waiting",
-    detail: "No feed poll yet",
-  });
   const [readiness, setReadiness] = useState(getTxLineReadiness());
   const [pick, setPick] = useState(null);
   const [lockedWager, setLockedWager] = useState(null);
@@ -326,36 +318,27 @@ function App() {
       if (!alive) return;
       setFixtures(nextFixtures);
       setFixturesLoading(false);
-      setFixturesError("");
-      setLastPoll({
-        tone: "ok",
-        label: "Fixtures live",
-        detail: nextFixtures.length ? `${nextFixtures.length} fixture option loaded` : "No fixture rows returned",
-      });
       if (!selectedFixtureId && nextFixtures[0]?.fixtureId) {
         setSelectedFixtureId(nextFixtures[0].fixtureId);
       }
     }).catch((error) => {
       if (!alive) return;
       setFixturesLoading(false);
-      setFixturesError(error.message);
-      setLastPoll({
-        tone: "error",
-        label: "Fixture error",
-        detail: error.message,
-      });
+      if (readiness.configured) setLiveError(error.message);
       setFixtures([]);
     });
 
     return () => {
       alive = false;
     };
-  }, []);
+  }, [readiness.configured]);
 
   useEffect(() => {
     let alive = true;
 
     const poll = async () => {
+      if (!readiness.configured || !selectedFixtureId) return;
+
       try {
         const snapshot = await fetchLiveMatchSnapshot({
           fixtureId: selectedFixtureId,
@@ -364,11 +347,6 @@ function App() {
         if (!alive) return;
 
         setLiveError("");
-        setLastPoll({
-          tone: snapshot.connected ? "ok" : "error",
-          label: snapshot.connected ? "TxLINE live" : "Snapshot unavailable",
-          detail: `${snapshot.source} at minute ${snapshot.minute ?? "n/a"}`,
-        });
         matchRef.current = snapshot;
         setMatch(snapshot);
         setStats({
@@ -390,11 +368,6 @@ function App() {
       } catch (error) {
         if (!alive) return;
         setLiveError(error.message);
-        setLastPoll({
-          tone: "error",
-          label: "Snapshot error",
-          detail: error.message,
-        });
         setMatch((value) => {
           const nextMatch = { ...value, connected: false, source: "Feed Error" };
           matchRef.current = nextMatch;
@@ -409,7 +382,7 @@ function App() {
       alive = false;
       window.clearInterval(interval);
     };
-  }, [selectedFixtureId]);
+  }, [readiness.configured, selectedFixtureId]);
 
   useEffect(() => {
     if (second === 30 && !locked) {
@@ -515,10 +488,10 @@ function App() {
               </button>
 
               <label className="fixture-picker">
-                <span>{fixturesLoading ? "Loading matches" : "TxLINE fixture"}</span>
+                <span>{readiness.configured && fixturesLoading ? "Loading matches" : "TxLINE fixture"}</span>
                 <select
                   aria-label="Select match fixture"
-                  disabled={fixturesLoading || fixtures.length === 0}
+                  disabled={!readiness.configured || fixturesLoading || fixtures.length === 0}
                   onChange={(event) => {
                     setSelectedFixtureId(event.target.value);
                     setSecond(0);
@@ -535,11 +508,11 @@ function App() {
               <p className="session-note">
                 {readiness.configured
                   ? `${readiness.network} feed credentials present at service level ${readiness.serviceLevel}.`
-                  : `Missing ${readiness.missing.join(" and ")}; live markets remain closed.`}
+                  : "Activation needed: finish TxLINE token setup to open live markets."}
               </p>
               <p className="session-note secondary">
                 {wallet
-                  ? "Connected wallet is used for identity; treasury custody must be configured before accepting real funds."
+                  ? "Phantom is connected. Complete TxLINE activation once, then fixtures open automatically."
                   : "Get credentials from TxLINE: subscribe with your Solana wallet, request guest JWT, sign txSig::jwt, then activate the API token."}
               </p>
               {walletChooserOpen ? (
@@ -559,40 +532,27 @@ function App() {
                 </div>
               ) : null}
               {!readiness.configured ? (
-                <div className="setup-guide" aria-label="Where to get TxLINE credentials">
+                <div className="activation-card" aria-label="TxLINE activation status">
                   <div>
-                    <strong>Where to get JWT + token</strong>
-                    <span>World Cup free tier: service level 1 delayed or 12 real-time. Needs SOL for subscription fees.</span>
+                    <strong>TxLINE activation</strong>
+                    <span>JWT is ready locally. Add the activated API token after your wallet subscription.</span>
                   </div>
-                  {txLineSetupLinks.map((link) => (
-                    <a href={link.href} key={link.href} rel="noreferrer" target="_blank">
-                      {link.label}
-                      <ExternalLink size={13} />
-                    </a>
-                  ))}
+                  <code>npm.cmd run txline:setup -- --api-token=...</code>
                 </div>
               ) : null}
-              <div className="readiness-panel" aria-label="TxLINE readiness">
-                <StatusChip label="Network" value={readiness.network} tone="ok" />
-                <StatusChip label="Level" value={readiness.serviceLevel} tone="ok" />
-                <StatusChip label="JWT" value={readiness.hasGuestJwt ? "Present" : "Missing"} tone={readiness.hasGuestJwt ? "ok" : "warn"} />
-                <StatusChip label="Token" value={readiness.hasApiToken ? "Present" : "Missing"} tone={readiness.hasApiToken ? "ok" : "warn"} />
-                <StatusChip label="Fixture" value={selectedFixtureId ? "Selected" : "Missing"} tone={selectedFixtureId ? "ok" : "warn"} />
-                <StatusChip label="Last Poll" value={lastPoll.label} tone={lastPoll.tone} />
-              </div>
-              {fixturesError || liveError ? (
+              {readiness.configured && liveError ? (
                 <p className="state-note" role="status">
-                  {fixturesError || liveError}. Configure TxLINE before opening markets.
+                  {liveError}. Check TxLINE credentials before opening markets.
                 </p>
               ) : null}
-              {!fixturesLoading && fixtures.length === 0 ? (
+              {readiness.configured && !fixturesLoading && fixtures.length === 0 ? (
                 <p className="state-note" role="status">
                   No TxLINE fixtures returned. Markets stay closed until a live fixture is available.
                 </p>
               ) : null}
             </section>
 
-            {setupBlocked ? <ProductionGateCard readiness={readiness} /> : (
+            {setupBlocked ? <ProductionGateCard /> : (
             <article className={`cycle-card ${inActionWindow ? "is-action" : "is-sweat"}`}>
               <div className="phase-row">
                 <span>{inActionWindow ? "00s-30s prediction" : "30s-60s sweat"}</span>
@@ -706,22 +666,6 @@ function App() {
           ))}
         </section>
 
-        <section className="metrics-panel">
-          <header>
-            <h2>Minute Telemetry</h2>
-            <div className="oracle-chip">
-              <Activity size={15} />
-              {liveError || match.source}
-            </div>
-          </header>
-          <div className="metrics-grid">
-            <Metric label="Attacks" value={stats.attacks} />
-            <Metric label="Duels" value={stats.duels} />
-            <Metric label="Corners" value={stats.corners} />
-            <Metric label="Cards" value={stats.cards} />
-          </div>
-        </section>
-
         <section className="architecture-panel">
           <h2>Prediction Markets Track</h2>
           <div className="rail-item">
@@ -787,7 +731,7 @@ function getWalletOptions() {
   ];
 }
 
-function ProductionGateCard({ readiness }) {
+function ProductionGateCard() {
   return (
     <article className="production-gate-card">
       <div className="phase-row">
@@ -805,9 +749,7 @@ function ProductionGateCard({ readiness }) {
         </div>
       </div>
       <div className="env-list">
-        <code>TXLINE_JWT</code>
-        <code>TXLINE_API_TOKEN</code>
-        <code>TXLINE_SERVICE_LEVEL={readiness.serviceLevel}</code>
+        <code>Waiting for activated TxLINE API token</code>
       </div>
     </article>
   );
@@ -897,24 +839,6 @@ function FeedCard({ feed }) {
         )}
       </div>
     </article>
-  );
-}
-
-function Metric({ label, value }) {
-  return (
-    <div className="metric">
-      <span>{label}</span>
-      <strong>{value}</strong>
-    </div>
-  );
-}
-
-function StatusChip({ label, value, tone }) {
-  return (
-    <div className={`status-chip ${tone}`}>
-      <span>{label}</span>
-      <strong>{value}</strong>
-    </div>
   );
 }
 
