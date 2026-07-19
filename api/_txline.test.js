@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { activationMessage, fetchScoreValidation, getServerConfig, readinessPayload } from "./_txline.js";
+import { activationMessage, fetchScoreValidation, getServerConfig, readinessPayload, refreshGuestJwt } from "./_txline.js";
 
 test("server config reports missing TxLINE secrets without exposing values", () => {
   const previousJwt = process.env.TXLINE_JWT;
@@ -76,6 +76,28 @@ test("server builds TxLINE activation message from the local guest JWT", () => {
   );
 
   restoreEnv("TXLINE_JWT", previousJwt);
+});
+
+test("refreshGuestJwt mints and caches a replacement guest token", async () => {
+  const previousFetch = globalThis.fetch;
+  const previousJwt = process.env.TXLINE_JWT;
+  const previousVercel = process.env.VERCEL;
+  process.env.VERCEL = "1";
+  process.env.TXLINE_JWT = "old.jwt";
+  globalThis.fetch = async (url, options) => {
+    assert.equal(url, "https://txline.txodds.com/auth/guest/start");
+    assert.equal(options.method, "POST");
+    return Response.json({ token: "new.jwt" });
+  };
+
+  const token = await refreshGuestJwt();
+
+  assert.equal(token, "new.jwt");
+  assert.equal(process.env.TXLINE_JWT, "new.jwt");
+
+  globalThis.fetch = previousFetch;
+  restoreEnv("TXLINE_JWT", previousJwt);
+  restoreEnv("VERCEL", previousVercel);
 });
 
 function restoreEnv(key, value) {

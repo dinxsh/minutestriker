@@ -1,3 +1,5 @@
+import fs from "node:fs/promises";
+import path from "node:path";
 import { initialMatchSnapshot, normalizeFixture, normalizeTxLine } from "../src/integrations.js";
 
 const DEFAULT_MAINNET_ORIGIN = "https://txline.txodds.com";
@@ -182,7 +184,45 @@ export async function activateApiToken({ txSig, walletSignature, leagues = [] })
   }
 
   process.env.TXLINE_API_TOKEN = token;
+  await persistLocalEnvValue("TXLINE_API_TOKEN", token);
   return token;
+}
+
+export async function refreshGuestJwt() {
+  const config = getServerConfig();
+  const response = await fetch(config.guestAuthUrl, {
+    method: "POST",
+    headers: { Accept: "application/json" },
+  });
+
+  const payload = await response.json().catch(() => null);
+  if (!response.ok) {
+    throw httpError(response.status, `TxLINE guest auth returned ${response.status}`, true);
+  }
+
+  const token = payload?.token || payload?.jwt || payload?.accessToken;
+  if (!token || typeof token !== "string") {
+    throw httpError(502, "TxLINE guest auth did not return a JWT", true);
+  }
+
+  process.env.TXLINE_JWT = token;
+  await persistLocalEnvValue("TXLINE_JWT", token);
+  return token;
+}
+
+export async function persistLocalEnvValue(key, value) {
+  if (process.env.VERCEL || process.env.NODE_ENV === "production") return false;
+
+  const envPath = path.join(process.cwd(), ".env.local");
+  const existing = await fs.readFile(envPath, "utf8").catch(() => "");
+  const nextLine = `${key}=${value}`;
+  const lines = existing
+    .split(/\r?\n/)
+    .filter((line) => line.trim() && !line.startsWith(`${key}=`));
+
+  lines.push(nextLine);
+  await fs.writeFile(envPath, `${lines.join("\n")}\n`, "utf8");
+  return true;
 }
 
 export function handleApiError(response, error) {
@@ -205,7 +245,26 @@ function requireConfiguredTxLine() {
 
 async function txLineFetch(config, path) {
   const url = `${config.apiBaseUrl}${pathWithServiceLevel(path, config.serviceLevel)}`;
-  const response = await fetch(url, {
+  let response = await fetchTxLineUrl(url, config);
+
+  if (response.status === 401 && config.hasApiToken) {
+    await refreshGuestJwt();
+    response = await fetchTxLineUrl(url, getServerConfig());
+  }
+
+  if (!response.ok) {
+    const message =
+      response.status === 401
+        ? "TxLINE authorization expired; reconnect wallet and activate TxLINE again"
+        : `TxLINE returned ${response.status}`;
+    throw httpError(response.status, message, true);
+  }
+
+  return response.json();
+}
+
+function fetchTxLineUrl(url, config) {
+  return fetch(url, {
     headers: {
       Accept: "application/json",
       Authorization: `Bearer ${config.guestJwt}`,
@@ -213,12 +272,6 @@ async function txLineFetch(config, path) {
       "X-Service-Level": config.serviceLevel,
     },
   });
-
-  if (!response.ok) {
-    throw httpError(response.status, `TxLINE returned ${response.status}`, true);
-  }
-
-  return response.json();
 }
 
 function pathWithServiceLevel(path, serviceLevel) {
