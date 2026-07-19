@@ -176,21 +176,20 @@ function App() {
   const connectWallet = async (option) => {
     const provider = option.provider;
 
-    if (!provider?.connect) {
+    if (!canConnectWallet(provider)) {
       showToast(`${option.name} is not available in this browser`);
       return;
     }
 
     try {
-      const response = await provider.connect();
-      setWallet(response.publicKey.toString());
-      provider.publicKey = response.publicKey;
-      setWalletProvider(provider);
+      const connection = await connectWalletProvider(provider);
+      setWallet(connection.address);
+      setWalletProvider(connection.provider);
       setWalletName(option.name);
       setWalletChooserOpen(false);
       showToast(`${option.name} connected`);
-    } catch {
-      showToast("Wallet connection cancelled");
+    } catch (error) {
+      showToast(walletErrorMessage(error));
     }
   };
 
@@ -728,7 +727,10 @@ function getWalletOptions() {
   const solana = safeRead(() => browserWindow.solana);
   const phantom = safeRead(() => browserWindow.phantom?.solana) || (safeRead(() => solana?.isPhantom) ? solana : null);
   const solflare = safeRead(() => browserWindow.solflare) || (safeRead(() => solana?.isSolflare) ? solana : null);
-  const backpack = safeRead(() => browserWindow.backpack) || (safeRead(() => solana?.isBackpack) ? solana : null);
+  const backpack =
+    safeRead(() => browserWindow.backpack?.solana) ||
+    safeRead(() => browserWindow.backpack) ||
+    (safeRead(() => solana?.isBackpack) ? solana : null);
   const metamaskSolana =
     safeRead(() => browserWindow.ethereum?.solana) ||
     safeRead(() => browserWindow.ethereum?.providers?.find?.((provider) => provider?.isMetaMask && provider?.solana)?.solana) ||
@@ -756,6 +758,54 @@ function getWalletOptions() {
       hint: "Open MetaMask Solana account",
     },
   ];
+}
+
+async function connectWalletProvider(provider) {
+  const response = provider.connect
+    ? await provider.connect({ onlyIfTrusted: false })
+    : await provider.request({ method: "connect" });
+  const publicKey = publicKeyFrom(response) || publicKeyFrom(provider);
+
+  if (!publicKey) {
+    throw new Error("Wallet connected but did not return a Solana address");
+  }
+
+  return {
+    address: publicKey.toString(),
+    provider: {
+      ...provider,
+      publicKey,
+      signTransaction: provider.signTransaction?.bind(provider),
+      signAllTransactions: provider.signAllTransactions?.bind(provider),
+      signMessage: provider.signMessage?.bind(provider),
+      request: provider.request?.bind(provider),
+    },
+  };
+}
+
+function canConnectWallet(provider) {
+  return Boolean(provider && (provider.connect || provider.request));
+}
+
+function publicKeyFrom(value) {
+  if (!value) return null;
+  if (value.publicKey) return value.publicKey;
+  if (value.account?.publicKey) return value.account.publicKey;
+  if (value.accounts?.[0]?.publicKey) return value.accounts[0].publicKey;
+  if (value.accounts?.[0]?.address) return value.accounts[0].address;
+  if (Array.isArray(value) && value[0]?.publicKey) return value[0].publicKey;
+  return null;
+}
+
+function walletErrorMessage(error) {
+  const message = String(error?.message || "").trim();
+  const code = error?.code;
+
+  if (code === 4001 || /reject|denied|cancel/i.test(message)) {
+    return "Wallet connection cancelled";
+  }
+
+  return message || "Wallet connection failed";
 }
 
 function safeRead(read) {
