@@ -141,7 +141,6 @@ function App() {
   const remaining = inActionWindow ? 30 - second : 60 - second;
   const progress = Math.min(100, (second / 60) * 100);
   const marketReady = Boolean(readiness.configured && selectedFixtureId && match.connected);
-  const setupBlocked = !marketReady;
   const renderedQuestionText = question.text
     .replace("{next}", minute + 1)
     .replace("{home}", match.homeName)
@@ -232,6 +231,8 @@ function App() {
   };
 
   const settleMinute = () => {
+    if (!marketReady) return;
+
     const wager = lockedWager ?? {
       pick: null,
       question,
@@ -385,6 +386,8 @@ function App() {
   }, [readiness.configured, selectedFixtureId]);
 
   useEffect(() => {
+    if (!marketReady) return;
+
     if (second === 30 && !locked) {
       setSettlement({
         tone: "idle",
@@ -401,10 +404,10 @@ function App() {
       const next = window.setTimeout(advanceMinute, 1500);
       return () => window.clearTimeout(next);
     }
-  }, [second]);
+  }, [second, marketReady, locked]);
 
   const controlsDisabled = locked || !inActionWindow || !marketReady;
-  const phaseCopy = marketReady ? (inActionWindow ? "Action window open" : "Sweat window locked") : "TxLINE unavailable";
+  const phaseCopy = marketReady ? (inActionWindow ? "Action window open" : "Sweat window locked") : "Live sync pending";
   const statusCards = useMemo(
     () => [
       {
@@ -448,36 +451,26 @@ function App() {
               </div>
             </nav>
 
-            {marketReady ? (
-              <>
-                <div className="scoreline">
-                  <Team name={match.homeName} sublabel="Possession" stat={`${stats.homePossession}%`} />
-                  <div className="score">
-                    {match.homeScore}-{match.awayScore}
-                  </div>
-                  <Team name={match.awayName} sublabel="Shots" stat={stats.awayShots} align="right" />
-                </div>
-
-                <div className="ticker">
-                  <div className="minute">
-                    <strong>{minute}'</strong>
-                    <span>{phaseCopy}</span>
-                  </div>
-                  <div className="balance-card">
-                    <span>{wallet ? "Wallet" : "Balance"}</span>
-                    <strong>
-                      {wallet ? formatWallet(wallet) : `${formatMoney(balance)} USDC`}
-                    </strong>
-                  </div>
-                </div>
-              </>
-            ) : (
-              <div className="txline-gate">
-                <span>Production data required</span>
-                <strong>Connect TxLINE before markets open</strong>
-                <p>No fixture, scoreline, timer market, or balance is shown until a real TxLINE snapshot succeeds.</p>
+            <div className="scoreline">
+              <Team name={marketReady ? match.homeName : "mineetes"} sublabel="Possession" stat={marketReady ? `${stats.homePossession}%` : "--"} />
+              <div className="score">
+                {marketReady ? `${match.homeScore}-${match.awayScore}` : "LIVE"}
               </div>
-            )}
+              <Team name={marketReady ? match.awayName : "TxLINE"} sublabel="Shots" stat={marketReady ? stats.awayShots : "--"} align="right" />
+            </div>
+
+            <div className="ticker">
+              <div className="minute">
+                <strong>{marketReady ? `${minute}'` : "--"}</strong>
+                <span>{phaseCopy}</span>
+              </div>
+              <div className="balance-card">
+                <span>{wallet ? "Wallet" : "Balance"}</span>
+                <strong>
+                  {wallet ? formatWallet(wallet) : `${formatMoney(balance)} USDC`}
+                </strong>
+              </div>
+            </div>
           </header>
 
           <section className="play-stack">
@@ -508,12 +501,12 @@ function App() {
               <p className="session-note">
                 {readiness.configured
                   ? `${readiness.network} feed credentials present at service level ${readiness.serviceLevel}.`
-                  : "Activation needed: finish TxLINE token setup to open live markets."}
+                  : "Live markets open after TxLINE activation."}
               </p>
               <p className="session-note secondary">
                 {wallet
-                  ? "Phantom is connected. Complete TxLINE activation once, then fixtures open automatically."
-                  : "Get credentials from TxLINE: subscribe with your Solana wallet, request guest JWT, sign txSig::jwt, then activate the API token."}
+                  ? "Wallet connected for identity."
+                  : "Choose a Solana wallet to continue."}
               </p>
               {walletChooserOpen ? (
                 <div className="wallet-chooser" aria-label="Choose Solana wallet">
@@ -531,15 +524,6 @@ function App() {
                   ))}
                 </div>
               ) : null}
-              {!readiness.configured ? (
-                <div className="activation-card" aria-label="TxLINE activation status">
-                  <div>
-                    <strong>TxLINE activation</strong>
-                    <span>JWT is ready locally. Add the activated API token after your wallet subscription.</span>
-                  </div>
-                  <code>npm.cmd run txline:setup -- --api-token=...</code>
-                </div>
-              ) : null}
               {readiness.configured && liveError ? (
                 <p className="state-note" role="status">
                   {liveError}. Check TxLINE credentials before opening markets.
@@ -552,7 +536,6 @@ function App() {
               ) : null}
             </section>
 
-            {setupBlocked ? <ProductionGateCard /> : (
             <article className={`cycle-card ${inActionWindow ? "is-action" : "is-sweat"}`}>
               <div className="phase-row">
                 <span>{inActionWindow ? "00s-30s prediction" : "30s-60s sweat"}</span>
@@ -634,7 +617,6 @@ function App() {
                 </button>
               </div>
             </article>
-            )}
 
             <SettlementCard settlement={settlement} />
             <FeedCard feed={feed} />
@@ -729,30 +711,6 @@ function getWalletOptions() {
       hint: "Install Backpack",
     },
   ];
-}
-
-function ProductionGateCard() {
-  return (
-    <article className="production-gate-card">
-      <div className="phase-row">
-        <span>Markets closed</span>
-        <strong>Live only</strong>
-      </div>
-      <div className="production-gate-body">
-        <ShieldCheck size={24} />
-        <div>
-          <h1>Live TxLINE only</h1>
-          <p>
-            mineetes opens the prediction card only after TxLINE credentials are configured,
-            fixtures load, and a live score snapshot poll succeeds.
-          </p>
-        </div>
-      </div>
-      <div className="env-list">
-        <code>Waiting for activated TxLINE API token</code>
-      </div>
-    </article>
-  );
 }
 
 function SettlementCard({ settlement }) {

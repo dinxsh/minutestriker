@@ -241,43 +241,6 @@ button:disabled {
   gap: 14px;
 }
 
-.txline-gate {
-  padding: 16px;
-  color: #050507;
-  background: var(--panel);
-  border: 4px solid #050507;
-  border-radius: 6px;
-  box-shadow: var(--mini-shadow);
-}
-
-.txline-gate span,
-.txline-gate strong {
-  display: block;
-  text-transform: uppercase;
-}
-
-.txline-gate span {
-  color: #403c45;
-  font-size: 12px;
-  font-weight: 900;
-}
-
-.txline-gate strong {
-  margin-top: 6px;
-  font-family: Bangers, Inter, sans-serif;
-  font-size: 34px;
-  line-height: 0.95;
-  letter-spacing: 0;
-}
-
-.txline-gate p {
-  margin: 9px 0 0;
-  color: #403c45;
-  font-size: 12px;
-  font-weight: 800;
-  line-height: 1.35;
-}
-
 .team {
   flex: 1;
   min-width: 0;
@@ -510,57 +473,6 @@ button:disabled {
   text-transform: none;
 }
 
-.activation-card {
-  grid-column: 1 / -1;
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 7px;
-  padding: 9px;
-  color: #050507;
-  background: #dff9ff;
-  border: 3px solid #050507;
-  border-radius: 6px;
-  box-shadow: 2px 2px 0 #050507;
-}
-
-.activation-card div {
-  display: grid;
-  gap: 3px;
-}
-
-.activation-card strong,
-.activation-card span {
-  display: block;
-}
-
-.activation-card strong {
-  font-size: 12px;
-  font-weight: 900;
-  text-transform: uppercase;
-}
-
-.activation-card span {
-  color: #3d3945;
-  font-size: 11px;
-  font-weight: 800;
-  line-height: 1.35;
-}
-
-.activation-card code {
-  min-width: 0;
-  padding: 7px 9px;
-  overflow: hidden;
-  color: #050507;
-  background: var(--yellow);
-  border: 3px solid #050507;
-  border-radius: 6px;
-  box-shadow: 2px 2px 0 #050507;
-  font-size: 11px;
-  font-weight: 900;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 .state-note {
   padding: 7px 8px;
   background: #ffe6ef;
@@ -570,7 +482,6 @@ button:disabled {
 }
 
 .cycle-card,
-.production-gate-card,
 .settlement-card,
 .feed-card,
 .status-card,
@@ -588,16 +499,11 @@ button:disabled {
   animation: cardPop 0.42s cubic-bezier(0.2, 1.2, 0.25, 1) both;
 }
 
-.production-gate-card {
-  overflow: hidden;
-}
-
 .cycle-card.is-sweat {
   background: #dff9ff;
 }
 
 .cycle-card::after,
-.production-gate-card::after,
 .settlement-card::after,
 .feed-card::after,
 .status-card::after,
@@ -627,10 +533,6 @@ button:disabled {
   background: var(--orange);
 }
 
-.production-gate-card .phase-row {
-  background: var(--yellow);
-}
-
 .phase-row strong {
   min-width: 44px;
   padding: 4px 7px;
@@ -639,66 +541,6 @@ button:disabled {
   border-radius: 4px;
   text-align: center;
   font-size: 13px;
-}
-
-.production-gate-body {
-  position: relative;
-  z-index: 1;
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  gap: 11px;
-  padding: 16px 14px 12px;
-}
-
-.production-gate-body svg {
-  width: 42px;
-  height: 42px;
-  padding: 8px;
-  color: #050507;
-  background: var(--cyan);
-  border: 3px solid #050507;
-  border-radius: 6px;
-  box-shadow: 3px 3px 0 #050507;
-}
-
-.production-gate-body h1 {
-  margin: 0;
-  color: #050507;
-  font-size: 24px;
-  line-height: 1.05;
-  font-weight: 900;
-  text-transform: uppercase;
-}
-
-.production-gate-body p {
-  margin: 7px 0 0;
-  color: #3d3945;
-  font-size: 13px;
-  font-weight: 800;
-  line-height: 1.4;
-}
-
-.env-list {
-  position: relative;
-  z-index: 1;
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 8px;
-  padding: 0 14px 16px;
-}
-
-.env-list code {
-  min-width: 0;
-  padding: 8px 9px;
-  overflow: hidden;
-  color: #050507;
-  background: #fffdf2;
-  border: 3px solid #050507;
-  border-radius: 6px;
-  box-shadow: 2px 2px 0 #050507;
-  font-size: 12px;
-  font-weight: 900;
-  text-overflow: ellipsis;
 }
 
 .timer-block {
@@ -1368,7 +1210,4 @@ button:disabled {
     grid-template-columns: 1fr;
   }
 
-  .txline-gate strong {
-    font-size: 29px;
-  }
 }
