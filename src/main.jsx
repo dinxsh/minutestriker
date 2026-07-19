@@ -315,6 +315,15 @@ function App() {
   useEffect(() => {
     let alive = true;
 
+    if (!readiness.configured) {
+      setFixtures([]);
+      setFixturesLoading(false);
+      return () => {
+        alive = false;
+      };
+    }
+
+    setFixturesLoading(true);
     fetchFixtures().then((nextFixtures) => {
       if (!alive) return;
       setFixtures(nextFixtures);
