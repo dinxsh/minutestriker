@@ -1,4 +1,4 @@
-import { fetchServerFixtures, handleApiError, sendJson } from "./_txline.js";
+import { fetchServerFixtures, handleApiError, sendJson } from "../../api/_txline.js";
 
 export default async function handler(_request, response) {
   try {

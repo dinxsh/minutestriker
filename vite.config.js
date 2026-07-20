@@ -1,11 +1,11 @@
 import { defineConfig, loadEnv } from "vite";
 import react from "@vitejs/plugin-react";
-import fixturesHandler from "./api/fixtures.js";
-import liveHandler from "./api/live.js";
-import readinessHandler from "./api/readiness.js";
-import scoreValidationHandler from "./api/score-validation.js";
-import activateHandler from "./api/activate.js";
-import activationMessageHandler from "./api/activation-message.js";
+import fixturesHandler from "./server/txline-routes/fixtures.js";
+import liveHandler from "./server/txline-routes/live.js";
+import readinessHandler from "./server/txline-routes/readiness.js";
+import scoreValidationHandler from "./server/txline-routes/score-validation.js";
+import activateHandler from "./server/txline-routes/activate.js";
+import activationMessageHandler from "./server/txline-routes/activation-message.js";
 import bentoEstimateHandler from "./api/bento-estimate.js";
 import bentoExchangeHandler from "./api/bento-exchange.js";
 import bentoLinkHandler from "./api/bento-link.js";

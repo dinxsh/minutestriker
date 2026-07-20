@@ -1,4 +1,4 @@
-import { activateApiToken, handleApiError, readJsonBody, readinessPayload, sendJson } from "./_txline.js";
+import { activateApiToken, handleApiError, readJsonBody, readinessPayload, sendJson } from "../../api/_txline.js";
 
 export default async function handler(request, response) {
   if (request.method !== "POST") {

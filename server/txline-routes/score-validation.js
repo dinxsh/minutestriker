@@ -1,4 +1,4 @@
-import { fetchScoreValidation, handleApiError, sendJson } from "./_txline.js";
+import { fetchScoreValidation, handleApiError, sendJson } from "../../api/_txline.js";
 
 export default async function handler(request, response) {
   try {
