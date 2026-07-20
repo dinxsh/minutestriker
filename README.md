@@ -1,22 +1,24 @@
-# mineetes
+# haramball.xyz
 
-mineetes is a mobile-first World Cup prediction-market prototype for the TxODDS Superteam hackathon. It turns each live match minute into a 60-second YES/NO market with stake lock, frozen pool, event-driven settlement, and proof-ready receipts.
+haramball.xyz is a mobile-first World Cup prediction-market client. It turns Bento catalog reads, wallet login, quotes, bet placement, profile onboarding, leaderboards, and portfolio reconciliation into a fast YES/NO matchday loop.
 
-## Track Fit
+## Bento Fit
 
-Built for the Prediction Markets and Settlement track:
-
-- One-minute binary prediction markets
-- Instant settlement receipts
-- Server-side TxLINE fixture, score snapshot, and score update access
-- Score-validation proof proxy for on-chain validation integration
-- Mobile-first frontend and Vercel backend
-
-See [SUBMISSION.md](SUBMISSION.md) for the full requirement mapping.
+- Public market discovery before login
+- Wallet-signed auth for user actions
+- Fan profile onboarding and leaderboard identity
+- Quote-before-place flow with shares, slippage, and idempotency
+- Portfolio polling after accepted writes
+- Match ticket drawer with market id, preview id, account, stake, and outcome
 
 ## Backend Setup
 
-TxLINE secrets are server-only. See [BACKEND.md](BACKEND.md) for required environment variables and where to get them.
+Bento credentials stay server-side. See [BACKEND.md](BACKEND.md) for required environment variables.
+
+Hackathon reference:
+
+- Repo: https://github.com/Bentodotfun/build-on-bento
+- Form: https://forms.gle/UiJB7fVNCpwvnVLa7
 
 ## Local Development
 

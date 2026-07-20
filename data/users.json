@@ -1,0 +1,44 @@
+{
+  "users": [
+    {
+      "id": "captain-aya",
+      "name": "Captain Aya",
+      "team": "Argentina",
+      "style": "Striker",
+      "wins": 18,
+      "losses": 4,
+      "points": 2840,
+      "streak": 9
+    },
+    {
+      "id": "press-master",
+      "name": "Press Master",
+      "team": "France",
+      "style": "Midfield",
+      "wins": 15,
+      "losses": 5,
+      "points": 2410,
+      "streak": 6
+    },
+    {
+      "id": "last-minute",
+      "name": "Last Minute",
+      "team": "Brazil",
+      "style": "Chaos",
+      "wins": 13,
+      "losses": 6,
+      "points": 2195,
+      "streak": 5
+    },
+    {
+      "id": "clean-sheet",
+      "name": "Clean Sheet",
+      "team": "Japan",
+      "style": "Defense",
+      "wins": 11,
+      "losses": 7,
+      "points": 1880,
+      "streak": 4
+    }
+  ]
+}

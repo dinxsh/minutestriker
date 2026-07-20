@@ -1,80 +1,55 @@
-# mineetes Backend Setup
+# haramball.xyz Bento Backend Setup
 
-The frontend calls same-origin backend routes so TxLINE credentials stay server-side:
+The frontend calls same-origin backend routes so the Bento Builder API key stays server-side:
 
-- `/api/readiness` reports which backend envs are configured.
-- `/api/fixtures` fetches TxLINE fixtures.
-- `/api/live?fixtureId=...` fetches TxLINE score snapshots and updates.
-- `/api/score-validation?fixtureId=...&seq=...&statKey=...` proxies legacy single-stat validation.
-- `/api/score-validation?fixtureId=...&seq=...&statKeys=1,2,3001,3002` proxies current V2 multi-stat validation.
+- `/api/bento-readiness` reports backend configuration.
+- `/api/bento-markets` fetches public market catalog rows.
+- `/api/bento-market?duelId=...` fetches one market by on-chain `duelId`.
+- `/api/bento-login` exchanges a wallet-signed login message for a user JWT.
+- `/api/bento-estimate` previews a bet before placement.
+- `/api/bento-place-bet` places the previewed bet with an idempotency key.
+- `/api/bento-portfolio` reconciles account details and positions after accepted writes.
 
 ## Required Environment Variables
 
 Set these in Vercel Project Settings -> Environment Variables for Production and Preview:
 
-- `TXLINE_NETWORK`: `mainnet` or `devnet`. Use `mainnet` for the World Cup free-tier docs.
-- `TXLINE_ORIGIN`: `https://txline.txodds.com` for mainnet or `https://txline-dev.txodds.com` for devnet.
-- `TXLINE_JWT`: guest JWT from `POST https://txline.txodds.com/auth/guest/start`.
-- `TXLINE_API_TOKEN`: activated API token from `POST https://txline.txodds.com/api/token/activate`.
-- `TXLINE_SERVICE_LEVEL`: `1` for delayed free access or `12` for real-time if your subscription supports it.
+```env
+BENTO_URL=https://internal-server.bento.fun
+BENTO_BUILDER_API_KEY=bnt_...
+```
+
+The backend also accepts the hackathon shorthand:
+
+```env
+BUILDER_API_KEY=bnt_...
+```
 
 Optional:
 
-- `TXLINE_FIXTURE_ID`: pin the app to one fixture instead of choosing from `/api/fixtures`.
-
-Devnet activation/script variables from the runnable examples:
-
-- `ANCHOR_PROVIDER_URL`: `https://api.devnet.solana.com`
-- `ANCHOR_WALLET`: path to a funded devnet wallet JSON file, for example `./_keys/testuser-wallet-1.json`
-- `TOKEN_MINT_ADDRESS`: `4Zao8ocPhmMgq7PdsYWyxvqySMGx7xb9cMftPMkEokRG`
-
-The runnable devnet examples require Node.js `20` or newer.
-
-## Where To Get Them
-
-Use the TxLINE docs:
-
-- Quickstart: https://txline.txodds.com/documentation/quickstart
-- World Cup free tier: https://txline.txodds.com/documentation/worldcup
-- Runnable devnet examples: https://txline.txodds.com/documentation/examples/devnet-examples
-
-Local setup:
-
-```bash
-npm.cmd run txline:setup
+```env
+PARLAY_TOURNMENT_URL=https://bento-fun-tournaments-backend-3nku.onrender.com
 ```
 
-This writes `.env.local`, selects mainnet World Cup service level `12`, and fetches a guest JWT from `POST https://txline.txodds.com/auth/guest/start`. To use delayed free data instead, run:
+The `PARLAY_TOURNMENT_URL` spelling matches the hackathon reference repo. The backend also accepts `PARLAY_TOURNAMENT_URL`.
 
-```bash
-npm.cmd run txline:setup -- --service-level=1
-```
+## Bento Flow
 
-For devnet:
+1. Load public market catalog.
+2. Create a haramball.xyz fan profile.
+3. Connect an EVM wallet.
+4. Sign the Bento login message:
+   `Bento.fun Login\n Timestamp: ${timestamp}\n Wallet: ${address}`
+5. Store the returned user JWT in the browser session.
+6. Preview the selected option and stake through `/api/bento-estimate`.
+7. Place the bet through `/api/bento-place-bet`.
+8. Poll `/api/bento-portfolio` until the account reflects the position.
 
-```bash
-npm.cmd run txline:setup -- --network=devnet --service-level=1
-```
+## Legacy TxLINE Routes
 
-Flow:
+The old TxLINE prototype files remain in the repository for reference and tests, but they are no longer the active product path.
 
-1. Connect/fund the wallet required by TxLINE.
-2. Run `npm.cmd run txline:setup` to write the network, origin, service level, and guest JWT.
-3. Submit the TxLINE on-chain `subscribe` transaction for the same network and service level.
-4. Sign the exact activation message `txSig::TXLINE_JWT` with the subscribing wallet.
-5. Activate the token at `POST https://txline.txodds.com/api/token/activate`.
-6. Store the activated token as `TXLINE_API_TOKEN` in `.env.local` and Vercel.
-7. Restart local dev or redeploy Vercel so API routes receive the envs.
+## Hackathon Reference
 
-Devnet notes:
-
-- Use `TXLINE_NETWORK=devnet` with `TXLINE_ORIGIN=https://txline-dev.txodds.com`.
-- Keep the wallet network, Solana RPC, TxLINE program, guest JWT host, and activation endpoint on devnet together.
-- Use service level `1` for current devnet free-tier examples.
-- The docs' fixed `fixtureId` and `seq` pairs are example values. For production settlement, derive `fixtureId`, `seq`, phase, and status from observed score snapshots, updates, historical data, or streams.
-
-Score validation notes:
-
-- Legacy validation uses `statKey`.
-- Current V2 validation uses comma-separated `statKeys`; the stat order is part of the proof contract.
-- Final score records use `action=game_finalised`, `statusId=100`, and `period=100`.
+- Reference repo: https://github.com/Bentodotfun/build-on-bento
+- Required form: https://forms.gle/UiJB7fVNCpwvnVLa7

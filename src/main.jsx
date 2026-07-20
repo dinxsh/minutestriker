@@ -9,8 +9,13 @@ import {
   Flame,
   Gauge,
   Lock,
+  Medal,
+  Palette,
+  Settings,
   ShieldCheck,
   Trophy,
+  UserCircle,
+  UserPlus,
   Wallet,
   Wifi,
   WifiOff,
@@ -18,138 +23,93 @@ import {
   Zap,
 } from "lucide-react";
 import {
-  fetchFixtures,
-  fetchLiveMatchSnapshot,
-  fetchTxLineReadiness,
-  getTxLineReadiness,
-  initialMatchSnapshot,
-  resolvePrediction,
-  txLineNetworkConfig,
-} from "./integrations";
+  createBentoWalletLink,
+  estimateBentoBet,
+  exchangeBentoWalletCode,
+  extractEstimate,
+  fetchBentoMarkets,
+  fetchBentoPortfolio,
+  fetchBentoReadiness,
+  fetchLeaderboardUsers,
+  humanToWei,
+  initialBentoReadiness,
+  loginBentoWallet,
+  normalizeExternalLogin,
+  normalizeBentoLogin,
+  placeBentoBet,
+  saveLeaderboardUser,
+  shortAddress,
+  weiToHuman,
+} from "./bento";
 import "./styles.css";
 
-const questions = [
-  {
-    category: "Discipline",
-    text: "Will there be a foul or card before minute {next}?",
-    context:
-      "TxLINE is showing pressure near midfield with three defensive duels in the last 90 seconds.",
-    yes: "Foul confirmed by TxLINE",
-    no: "No foul event in minute",
-    rule: "YES if free_kick, foul, yellow_card, or red_card appears in target minute",
-    match: (event) =>
-      ["free_kick", "foul", "yellow_card", "red_card", "card"].some((type) => event.type?.includes(type)),
-  },
-  {
-    category: "Attack",
-    text: "Will either team attempt a shot in this minute?",
-    context:
-      "Both teams are pushing higher, with possession entering the final third twice since the last card.",
-    yes: "Shot attempt registered",
-    no: "No shot attempt registered",
-    rule: "YES if any shot event appears in target minute",
-    match: (event) => event.type?.includes("shot"),
-  },
-  {
-    category: "Set Piece",
-    text: "Will the ball go out for a corner or free kick?",
-    context:
-      "Wide overload detected on the right flank; crossing probability is rising.",
-    yes: "Set piece awarded",
-    no: "Open play continued",
-    rule: "YES if corner or non-offside free_kick appears in target minute",
-    match: (event) =>
-      event.type?.includes("corner") ||
-      (event.type?.includes("free_kick") && event.data?.FreeKickType !== "Offside"),
-  },
-  {
-    category: "Possession",
-    text: "Will {home} retain more possession than {away} this minute?",
-    context:
-      "Short-pass tempo has increased while the live feed reports the current possession split.",
-    yes: "{home} possession edge",
-    no: "{away} possession edge",
-    rule: "YES if home possession is greater than or equal to 50 at settlement",
-    statOnly: true,
-    match: (_event, snapshot) => snapshot.homePossession >= 50,
-  },
+const formatMoney = (value) => (Number.isFinite(Number(value)) ? Number(value).toFixed(2) : "0.00");
+const DEFAULT_PROFILES = [
+  { id: "captain-aya", name: "Captain Aya", team: "Argentina", style: "Striker", wins: 18, losses: 4, points: 2840, streak: 9 },
+  { id: "press-master", name: "Press Master", team: "France", style: "Midfield", wins: 15, losses: 5, points: 2410, streak: 6 },
+  { id: "last-minute", name: "Last Minute", team: "Brazil", style: "Chaos", wins: 13, losses: 6, points: 2195, streak: 5 },
+  { id: "clean-sheet", name: "Clean Sheet", team: "Japan", style: "Defense", wins: 11, losses: 7, points: 1880, streak: 4 },
 ];
-
-const initialFeed = [];
-const txLineSetupLinks = [
-  {
-    label: "World Cup free tier",
-    href: "https://txline.txodds.com/documentation/worldcup",
-  },
-  {
-    label: "Quickstart",
-    href: "https://txline.txodds.com/documentation/quickstart",
-  },
-  {
-    label: "Devnet examples",
-    href: "https://txline.txodds.com/documentation/examples/devnet-examples",
-  },
-];
-
-const formatMoney = (value) => (Number.isFinite(value) ? value : 0).toFixed(2);
-const formatWallet = (address) => (address ? `${address.slice(0, 4)}...${address.slice(-4)}` : "");
-const formatFeedTime = (feedMinute, currentSecond) =>
-  `${feedMinute}:${String(Math.min(60, Math.max(0, currentSecond))).padStart(2, "0")}`;
+const PROFILE_STORAGE_KEY = "haramball-world-cup-profiles";
+const ACTIVE_PROFILE_STORAGE_KEY = "haramball-active-profile-id";
+const THEME_STORAGE_KEY = "haramball-theme";
 
 function App() {
-  const [second, setSecond] = useState(0);
-  const [minute, setMinute] = useState(initialMatchSnapshot.minute);
-  const [stake, setStake] = useState(1);
-  const [balance, setBalance] = useState(42.5);
-  const [wallet, setWallet] = useState(null);
-  const [walletProvider, setWalletProvider] = useState(null);
-  const [walletName, setWalletName] = useState("");
-  const [activatingTxLine, setActivatingTxLine] = useState(false);
-  const [walletChooserOpen, setWalletChooserOpen] = useState(false);
-  const [match, setMatch] = useState(initialMatchSnapshot);
-  const [fixtures, setFixtures] = useState([]);
-  const [fixturesLoading, setFixturesLoading] = useState(true);
-  const [selectedFixtureId, setSelectedFixtureId] = useState(initialMatchSnapshot.fixtureId);
-  const [liveError, setLiveError] = useState("");
-  const [readiness, setReadiness] = useState(getTxLineReadiness());
+  const [readiness, setReadiness] = useState(initialBentoReadiness);
+  const [markets, setMarkets] = useState([]);
+  const [marketsLoading, setMarketsLoading] = useState(true);
+  const [marketError, setMarketError] = useState("");
+  const [marketIndex, setMarketIndex] = useState(0);
+  const [wallet, setWallet] = useState("");
+  const [token, setToken] = useState("");
+  const [authMode, setAuthMode] = useState("");
+  const [managedAccount, setManagedAccount] = useState("");
+  const [walletLoading, setWalletLoading] = useState(false);
+  const [linkLoading, setLinkLoading] = useState(false);
+  const [walletOptions, setWalletOptions] = useState([]);
+  const [stake, setStake] = useState("1");
   const [pick, setPick] = useState(null);
-  const [lockedWager, setLockedWager] = useState(null);
-  const [locked, setLocked] = useState(false);
-  const [questionIndex, setQuestionIndex] = useState(0);
-  const [pool, setPool] = useState(218.4);
+  const [estimate, setEstimate] = useState(null);
+  const [estimateLoading, setEstimateLoading] = useState(false);
+  const [placing, setPlacing] = useState(false);
+  const [portfolio, setPortfolio] = useState(null);
+  const [profiles, setProfiles] = useState(loadProfiles);
+  const [activeProfileId, setActiveProfileId] = useState(() => localStorage.getItem(ACTIVE_PROFILE_STORAGE_KEY) || "");
+  const [profileDraft, setProfileDraft] = useState({ name: "", team: "USA", style: "Striker" });
+  const [profileMenuOpen, setProfileMenuOpen] = useState(false);
+  const [profileModalOpen, setProfileModalOpen] = useState(() => !localStorage.getItem(ACTIVE_PROFILE_STORAGE_KEY));
+  const [profileMode, setProfileMode] = useState("onboarding");
+  const [theme, setTheme] = useState(() => localStorage.getItem(THEME_STORAGE_KEY) || "classic");
   const [toast, setToast] = useState("");
-  const [feed, setFeed] = useState(initialFeed);
+  const [feed, setFeed] = useState([]);
   const [settlement, setSettlement] = useState({
     tone: "idle",
     icon: "?",
-    title: "Awaiting lock",
-    body: "Pick YES or NO before the 30 second lock.",
+    title: "Choose a World Cup market",
+    body: "Pick a side, preview your ticket, then lock it before kickoff energy moves on.",
     payout: "--",
     receipt: null,
   });
-  const [stats, setStats] = useState({
-    attacks: initialMatchSnapshot.attacks,
-    duels: initialMatchSnapshot.duels,
-    corners: initialMatchSnapshot.corners,
-    cards: initialMatchSnapshot.cards,
-    homePossession: initialMatchSnapshot.homePossession,
-    awayShots: initialMatchSnapshot.awayShots,
-  });
-  const matchRef = useRef(initialMatchSnapshot);
-  const minuteRef = useRef(initialMatchSnapshot.minute);
+  const reconcileTimer = useRef(null);
 
-  const question = questions[questionIndex % questions.length];
-  const inActionWindow = second < 30;
-  const remaining = inActionWindow ? 30 - second : 60 - second;
-  const progress = Math.min(100, (second / 60) * 100);
-  const marketReady = Boolean(readiness.configured && selectedFixtureId && match.connected);
-  const renderedQuestionText = question.text
-    .replace("{next}", minute + 1)
-    .replace("{home}", match.homeName)
-    .replace("{away}", match.awayName);
-  const renderCopy = (value) =>
-    String(value).replace("{home}", match.homeName).replace("{away}", match.awayName);
-
+  const market = markets[marketIndex] || null;
+  const amountWei = useMemo(() => humanToWei(stake), [stake]);
+  const ready = readiness.configured && markets.length > 0;
+  const authed = Boolean(token && authMode === "wallet");
+  const optionLabel = pick === 0 ? market?.optionA : pick === 1 ? market?.optionB : "";
+  const marketTitle = marketsLoading
+    ? "Loading World Cup markets..."
+    : market?.title || (readiness.configured ? "No match markets returned" : "Market board needs setup");
+  const marketBody = market
+    ? "Preview your ticket before locking it. Your account refreshes after the pick is accepted."
+    : readiness.configured
+      ? "Try again when the live market board is available."
+      : "Add the server market key, then restart the app to load live World Cup markets.";
+  const leaderboard = useMemo(
+    () => [...profiles].sort((a, b) => b.wins - a.wins || b.points - a.points).slice(0, 8),
+    [profiles],
+  );
+  const activeProfile = profiles.find((profile) => profile.id === activeProfileId);
   const showToast = (message) => {
     setToast(message);
     window.clearTimeout(showToast.timer);
@@ -157,180 +117,33 @@ function App() {
   };
 
   useEffect(() => {
-    matchRef.current = match;
-  }, [match]);
-
-  useEffect(() => {
-    minuteRef.current = minute;
-  }, [minute]);
-
-  const addFeed = (label, currentSecond = second, feedMinute = minuteRef.current) => {
-    setFeed((items) => [
-      ...items.slice(-7),
-      { minute: formatFeedTime(feedMinute, currentSecond), label },
-    ]);
-  };
-
-  const walletOptions = getWalletOptions();
-
-  const connectWallet = async (option) => {
-    const provider = option.provider;
-
-    if (!canConnectWallet(provider)) {
-      showToast(`${option.name} is not available in this browser`);
-      return;
-    }
-
-    try {
-      const connection = await connectWalletProvider(provider);
-      setWallet(connection.address);
-      setWalletProvider(connection.provider);
-      setWalletName(option.name);
-      setWalletChooserOpen(false);
-      showToast(`${option.name} connected`);
-    } catch (error) {
-      showToast(walletErrorMessage(error));
-    }
-  };
-
-  const activateTxLine = async () => {
-    if (!walletProvider || !wallet) {
-      showToast("Choose a Solana wallet first");
-      return;
-    }
-
-    setActivatingTxLine(true);
-    try {
-      const { subscribeAndActivateWorldCup } = await import("./txline/subscribe");
-      const result = await subscribeAndActivateWorldCup({ provider: walletProvider, readiness });
-      const nextReadiness = result.activation?.readiness || await fetchTxLineReadiness();
-      setReadiness(nextReadiness);
-      setLiveError("");
-      showToast("TxLINE World Cup feed activated");
-    } catch (error) {
-      showToast(error.message || "TxLINE activation failed");
-    } finally {
-      setActivatingTxLine(false);
-    }
-  };
-
-  const placePick = (nextPick) => {
-    if (locked || !inActionWindow) return;
-
-    if (!marketReady) {
-      showToast("TxLINE live market is not ready");
-      return;
-    }
-
-    if (!Number.isFinite(stake) || stake <= 0) {
-      showToast("Enter a stake above 0 USDC");
-      return;
-    }
-
-    if (balance < stake) {
-      showToast("Stake exceeds available balance");
-      return;
-    }
-
-    setPick(nextPick);
-    setLockedWager({
-      pick: nextPick,
-      question,
-      stake,
-      targetMinute: minuteRef.current,
-      fixtureId: matchRef.current.fixtureId,
-      sequence: matchRef.current.sequence || "n/a",
-    });
-    setLocked(true);
-    setBalance((value) => value - stake);
-    setPool((value) => value + stake);
-    setSettlement({
-      tone: nextPick === "YES" ? "yes" : "no",
-      icon: nextPick === "YES" ? "Y" : "N",
-      title: `${nextPick} locked`,
-      body: `${formatMoney(stake)} USDC committed for minute ${minute}.`,
-      payout: "Live",
-    });
-    showToast(`${nextPick} locked for ${formatMoney(stake)} USDC`);
-  };
-
-  const settleMinute = () => {
-    if (!marketReady) return;
-
-    const wager = lockedWager ?? {
-      pick: null,
-      question,
-      stake,
-      targetMinute: minuteRef.current,
-    };
-    const resolution = resolvePrediction({
-      question: wager.question,
-      pick: wager.pick,
-      stake: wager.stake,
-      snapshot: matchRef.current,
-      targetMinute: wager.targetMinute,
-    });
-    resolution.receipt.lockedFixtureId = wager.fixtureId || resolution.receipt.fixtureId;
-    resolution.receipt.lockedSequence = wager.sequence || resolution.receipt.sequence;
-    const won = resolution.won;
-    const payout = resolution.payout;
-
-    if (won) setBalance((value) => value + payout);
-
-    setSettlement(
-      wager.pick
-        ? {
-            tone: won ? "won" : "lost",
-            icon: won ? "+" : "-",
-            title: won ? "Prediction won" : "Prediction missed",
-            body: renderCopy(resolution.answer === "YES" ? wager.question.yes : wager.question.no),
-            payout: won ? `+${formatMoney(payout)} USDC` : `-${formatMoney(wager.stake)}`,
-            receipt: resolution.receipt,
-          }
-        : {
-            tone: "idle",
-            icon: "-",
-            title: "Minute skipped",
-            body: "No prediction was locked before the action window closed.",
-            payout: "--",
-            receipt: resolution.receipt,
-          },
-    );
-    addFeed(resolution.answer === "YES" ? wager.question.yes : wager.question.no, 60, wager.targetMinute);
-    showToast(won ? "Settlement paid instantly" : "Minute settled");
-  };
-
-  const advanceMinute = () => {
-    setSecond(0);
-    setQuestionIndex((value) => value + 1);
-    setPick(null);
-    setLockedWager(null);
-    setLocked(false);
-    setPool(180 + Math.random() * 95);
-    setSettlement({
-      tone: "idle",
-      icon: "?",
-      title: "Awaiting lock",
-      body: "Pick YES or NO before the 30 second lock.",
-      payout: "--",
-      receipt: null,
-    });
-  };
-
-  useEffect(() => {
-    const timer = window.setInterval(() => {
-      setSecond((value) => value + 1);
-    }, 1000);
-    return () => window.clearInterval(timer);
-  }, []);
+    localStorage.setItem(PROFILE_STORAGE_KEY, JSON.stringify(profiles));
+  }, [profiles]);
 
   useEffect(() => {
     let alive = true;
+    fetchLeaderboardUsers()
+      .then((users) => {
+        if (alive && users.length) setProfiles(users.map(normalizeProfile));
+      })
+      .catch(() => {
+        if (alive) showToast("Using local leaderboard cache");
+      });
+    return () => {
+      alive = false;
+    };
+  }, []);
 
-    fetchTxLineReadiness().then((nextReadiness) => {
-      if (alive) setReadiness(nextReadiness);
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    localStorage.setItem(THEME_STORAGE_KEY, theme);
+  }, [theme]);
+
+  useEffect(() => {
+    let alive = true;
+    discoverEvmWalletOptions().then((options) => {
+      if (alive) setWalletOptions(options);
     });
-
     return () => {
       alive = false;
     };
@@ -338,263 +151,438 @@ function App() {
 
   useEffect(() => {
     let alive = true;
+    fetchBentoReadiness().then((next) => {
+      if (alive) setReadiness(next);
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
 
+  useEffect(() => {
+    let alive = true;
     if (!readiness.configured) {
-      setFixtures([]);
-      setFixturesLoading(false);
+      setMarkets([]);
+      setMarketError("");
+      setMarketsLoading(false);
       return () => {
         alive = false;
       };
     }
 
-    setFixturesLoading(true);
-    fetchFixtures().then((nextFixtures) => {
-      if (!alive) return;
-      setFixtures(nextFixtures);
-      setFixturesLoading(false);
-      if (!selectedFixtureId && nextFixtures[0]?.fixtureId) {
-        setSelectedFixtureId(nextFixtures[0].fixtureId);
-      }
-    }).catch((error) => {
-      if (!alive) return;
-      setFixturesLoading(false);
-      if (readiness.configured) setLiveError(error.message);
-      setFixtures([]);
-    });
-
+    setMarketsLoading(true);
+    fetchBentoMarkets({ page: 1, limit: 20 })
+      .then((nextMarkets) => {
+        if (!alive) return;
+        setMarkets(nextMarkets.filter((item) => item.duelId));
+        setMarketError("");
+      })
+      .catch((error) => {
+        if (!alive) return;
+        setMarketError(error.message);
+        setMarkets([]);
+      })
+      .finally(() => {
+        if (alive) setMarketsLoading(false);
+      });
     return () => {
       alive = false;
     };
   }, [readiness.configured]);
 
   useEffect(() => {
-    let alive = true;
-
-    const poll = async () => {
-      if (!readiness.configured || !selectedFixtureId) return;
-
-      try {
-        const snapshot = await fetchLiveMatchSnapshot({
-          fixtureId: selectedFixtureId,
-          previous: matchRef.current,
-        });
-        if (!alive) return;
-
-        setLiveError("");
-        matchRef.current = snapshot;
-        setMatch(snapshot);
-        setStats({
-          attacks: snapshot.attacks,
-          duels: snapshot.duels,
-          corners: snapshot.corners,
-          cards: snapshot.cards,
-          homePossession: snapshot.homePossession,
-          awayShots: snapshot.awayShots,
-        });
-
-        if (snapshot.connected && snapshot.minute) {
-          setMinute(snapshot.minute);
-        }
-
-        if (snapshot.latestEvent) {
-          addFeed(snapshot.latestEvent);
-        }
-      } catch (error) {
-        if (!alive) return;
-        setLiveError(error.message);
-        setMatch((value) => {
-          const nextMatch = { ...value, connected: false, source: "Feed Error" };
-          matchRef.current = nextMatch;
-          return nextMatch;
-        });
-      }
-    };
-
-    poll();
-    const interval = window.setInterval(poll, 5000);
-    return () => {
-      alive = false;
-      window.clearInterval(interval);
-    };
-  }, [readiness.configured, selectedFixtureId]);
+    setPick(null);
+    setEstimate(null);
+    setSettlement({
+      tone: "idle",
+      icon: "?",
+      title: market ? "Ready for your pick" : "Choose a World Cup market",
+      body: market ? "Select an outcome to preview the ticket before you lock it." : "Live match markets will appear here when the board loads.",
+      payout: "--",
+      receipt: null,
+    });
+  }, [market?.duelId]);
 
   useEffect(() => {
-    if (!marketReady) return;
+    if (!token) return;
+    refreshPortfolio();
+    return () => window.clearTimeout(reconcileTimer.current);
+  }, [token]);
 
-    if (second === 30 && !locked) {
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    const code = url.searchParams.get("code");
+    if (!code) return;
+
+    setLinkLoading(true);
+    exchangeBentoWalletCode({ code })
+      .then((payload) => {
+        const login = normalizeExternalLogin(payload);
+        if (!login.token) throw new Error("Wallet link did not return a session");
+        setAuthMode("link");
+        setWallet(login.address || "");
+        setManagedAccount(login.managedAccount || "");
+        setFeed((items) => [{ minute: "now", label: "Wallet linked. Browser wallet still required for tickets." }, ...items].slice(0, 6));
+        showToast("Wallet linked for profile");
+        url.searchParams.delete("code");
+        url.searchParams.delete("state");
+        window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
+      })
+      .catch((error) => showToast(error.message))
+      .finally(() => setLinkLoading(false));
+  }, []);
+
+  const connectWallet = async (walletOption) => {
+    const ethereum = walletOption?.provider || window.ethereum;
+    if (!ethereum?.request) {
+      showToast("No browser wallet found. Use wallet link.");
+      return;
+    }
+
+    setWalletLoading(true);
+    try {
+      const [address] = await ethereum.request({ method: "eth_requestAccounts" });
+      const timestamp = String(Date.now());
+      const message = `Bento.fun Login\nTimestamp: ${timestamp}\nWallet: ${address}`;
+      const signature = await ethereum.request({
+        method: "personal_sign",
+        params: [message, address],
+      });
+      const login = normalizeBentoLogin(
+        await loginBentoWallet({
+          address,
+          signature,
+          timestamp,
+          username: activeProfile?.name || `haramball-${address.slice(2, 8)}`,
+        }),
+      );
+
+      if (!login.token) throw new Error("Market login did not return a session");
+      setWallet(address);
+      setToken(login.token);
+      setAuthMode("wallet");
+      setManagedAccount(login.managedAccount || "");
+      setFeed((items) => [{ minute: "now", label: `${walletOption?.name || "Wallet"} connected for matchday markets` }, ...items].slice(0, 6));
+      showToast(`${walletOption?.name || "Wallet"} connected`);
+    } catch (error) {
+      showToast(walletErrorMessage(error));
+    } finally {
+      setWalletLoading(false);
+    }
+  };
+
+  const connectWithWalletLink = async () => {
+    setLinkLoading(true);
+    try {
+      const returnUrl = `${window.location.origin}${window.location.pathname}`;
+      const state = activeProfile?.id || `haramball-${Date.now()}`;
+      const payload = await createBentoWalletLink({ returnUrl, state });
+      const url = payload.url || payload.data?.url;
+      if (!url) throw new Error("Wallet link did not return a URL");
+      window.location.href = url;
+    } catch (error) {
+      showToast(error.message);
+    } finally {
+      setLinkLoading(false);
+    }
+  };
+
+  const quotePick = async (optionIndex) => {
+    if (!market) return;
+    setPick(optionIndex);
+    setEstimate(null);
+
+    if (!authed) {
+      openProfileModal(activeProfile ? "settings" : "onboarding");
+      showToast(authMode === "link" ? "Use browser wallet to trade" : "Connect wallet before previewing");
+      return;
+    }
+    if (Number(stake) <= 0) {
+      showToast("Enter a stake above 0");
+      return;
+    }
+
+    setEstimateLoading(true);
+    try {
+      const nextEstimate = extractEstimate(
+        await estimateBentoBet({
+          token,
+          duelId: market.duelId,
+          optionIndex,
+          amountWei,
+          slippageBps: 100,
+        }),
+      );
+      setEstimate(nextEstimate);
       setSettlement({
-        tone: "idle",
-        icon: <Lock size={18} />,
-        title: "Action window closed",
-        body: "The pool is frozen until this minute resolves.",
-        payout: "Locked",
+        tone: optionIndex === 0 ? "yes" : "no",
+        icon: optionIndex === 0 ? "Y" : "N",
+        title: `${optionIndex === 0 ? market.optionA : market.optionB} preview ready`,
+        body: nextEstimate.sharesOut
+          ? `Estimated ${weiToHuman(nextEstimate.sharesOut)} shares before final confirmation.`
+          : "Ticket preview is ready. Review and lock when you are happy.",
+        payout: "Preview",
         receipt: null,
       });
+    } catch (error) {
+      showToast(error.message);
+    } finally {
+      setEstimateLoading(false);
+    }
+  };
+
+  const submitBet = async () => {
+    if (!market || pick === null || !estimate) {
+      showToast("Preview an outcome first");
+      return;
     }
 
-    if (second === 60) {
-      settleMinute();
-      const next = window.setTimeout(advanceMinute, 1500);
-      return () => window.clearTimeout(next);
-    }
-  }, [second, marketReady, locked]);
+    setPlacing(true);
+    const idempotencyKey = crypto.randomUUID();
+    const quote = estimate.raw?.estimate || estimate.raw?.data?.estimate || estimate.raw?.data || estimate.raw;
+    const bet = {
+      estimate: quote,
+      duelId: market.duelId,
+      duelType: "prediction",
+      bet: optionLabel,
+      optionIndex: pick,
+      betAmount: amountWei,
+      betAmountUsdc: amountWei,
+      slippageBps: 100,
+      collateralMode: market.raw?.collateralMode || market.raw?.collateral_mode || undefined,
+    };
 
-  const controlsDisabled = locked || !inActionWindow || !marketReady;
-  const phaseCopy = marketReady ? (inActionWindow ? "Action window open" : "Sweat window locked") : "Live sync pending";
-  const statusCards = useMemo(
-    () => [
-      {
-        icon: <Clock3 size={18} />,
-        label: "Market Open",
-        value: "00s-30s",
-        body: "One-minute binary market with explicit stake lock.",
-      },
-      {
-        icon: <Gauge size={18} />,
-        label: "Market Frozen",
-        value: "30s-60s",
-        body: "Pool freezes while TxLINE telemetry keeps updating.",
-      },
-      {
+    try {
+      await placeBentoBet({ token, idempotencyKey, bet });
+      const receipt = {
+        duelId: market.duelId,
+        market: market.title,
+        outcome: optionLabel,
+        stake: `${formatMoney(stake)} USDC`,
+        shares: estimate.sharesOut ? weiToHuman(estimate.sharesOut) : "pending",
+        quoteId: estimate.quoteId || "sdk",
+        idempotencyKey,
+        account: managedAccount || "Market account",
+      };
+      setSettlement({
+        tone: "won",
         icon: <ShieldCheck size={18} />,
-        label: "Settlement",
-        value: "Instant",
-        body: "Rule-based receipt resolves from score events and proof routes.",
-      },
-    ],
-    [],
-  );
+        title: "Ticket locked",
+        body: "Your position is live. We are refreshing your account until the market catches up.",
+        payout: "Pending",
+        receipt,
+      });
+      setFeed((items) => [{ minute: "now", label: `${optionLabel} ticket locked for market ${market.duelId}` }, ...items].slice(0, 6));
+      showToast("Ticket locked");
+      reconcilePortfolio(0);
+    } catch (error) {
+      showToast(error.message);
+    } finally {
+      setPlacing(false);
+    }
+  };
+
+  const refreshPortfolio = async () => {
+    try {
+      const nextPortfolio = await fetchBentoPortfolio({ token, account: managedAccount });
+      setPortfolio(nextPortfolio);
+      return nextPortfolio;
+    } catch {
+      return null;
+    }
+  };
+
+  const reconcilePortfolio = (attempt) => {
+    window.clearTimeout(reconcileTimer.current);
+    reconcileTimer.current = window.setTimeout(async () => {
+      const nextPortfolio = await refreshPortfolio();
+      if (nextPortfolio) {
+        setSettlement((value) => ({
+          ...value,
+          title: attempt > 0 ? "Account refreshed" : value.title,
+          body: "Your account has refreshed. Final result updates when the market settles.",
+        }));
+      }
+      if (attempt < 4) reconcilePortfolio(attempt + 1);
+    }, attempt === 0 ? 1200 : 3500);
+  };
+
+  const nextMarket = () => {
+    setMarketIndex((value) => (markets.length ? (value + 1) % markets.length : 0));
+  };
+
+  const previousMarket = () => {
+    setMarketIndex((value) => (markets.length ? (value - 1 + markets.length) % markets.length : 0));
+  };
+
+  const openProfileModal = (mode) => {
+    setProfileMode(mode);
+    if (activeProfile) {
+      setProfileDraft({ name: activeProfile.name, team: activeProfile.team, style: activeProfile.style });
+    }
+    setProfileModalOpen(true);
+    setProfileMenuOpen(false);
+  };
+
+  const saveProfile = (event) => {
+    event.preventDefault();
+    const cleanName = profileDraft.name.trim();
+    if (!cleanName) {
+      showToast("Add a profile name");
+      return;
+    }
+
+    const existing = profileMode !== "onboarding" && activeProfile;
+    const nextProfile = normalizeProfile(existing
+      ? { ...activeProfile, name: cleanName, team: profileDraft.team, style: profileDraft.style }
+      : {
+          id: `${cleanName.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-${Date.now()}`,
+          name: cleanName,
+          team: profileDraft.team,
+          style: profileDraft.style,
+          wins: 0,
+          losses: 0,
+          points: 1200 + Math.floor(Math.random() * 420),
+          streak: 0,
+        });
+
+    setProfiles((items) => existing ? items.map((item) => item.id === activeProfile.id ? nextProfile : item) : [...items, nextProfile]);
+    saveLeaderboardUser(nextProfile)
+      .then((saved) => setProfiles((items) => items.map((item) => item.id === saved.id ? normalizeProfile(saved) : item)))
+      .catch(() => showToast("Profile saved locally only"));
+    setActiveProfileId(nextProfile.id);
+    localStorage.setItem(ACTIVE_PROFILE_STORAGE_KEY, nextProfile.id);
+    setProfileDraft({ name: "", team: profileDraft.team, style: profileDraft.style });
+    setProfileModalOpen(false);
+    setFeed((items) => [{ minute: "now", label: existing ? `${cleanName} updated their fan profile` : `${cleanName} joined the leaderboard` }, ...items].slice(0, 6));
+    showToast(existing ? "Profile updated" : "Profile created");
+  };
+
+  const statusCards = [
+    {
+      icon: <Clock3 size={18} />,
+      label: "Match Board",
+      value: marketsLoading ? "Loading" : `${markets.length} markets`,
+      body: "World Cup markets load before you connect a wallet.",
+    },
+    {
+      icon: <Gauge size={18} />,
+      label: "Ticket",
+      value: estimate ? "Ready" : "Required",
+      body: "Preview shares and price before locking a pick.",
+    },
+    {
+      icon: <ShieldCheck size={18} />,
+      label: "Result",
+      value: "Tracked",
+      body: "Your account refreshes after every locked ticket.",
+    },
+  ];
 
   return (
     <main className="app-shell">
-      <section className="phone-frame" aria-label="mineetes mobile app">
+      <section className="phone-frame" aria-label="haramball.xyz World Cup app">
         <div className="phone-screen">
           <header className="match-hero">
             <nav className="topbar" aria-label="Match controls">
               <div className="brand">
                 <span className="logo-mark" aria-hidden="true">
-                  <span className="logo-mi">mi</span>
+                  <span className="logo-mi">hb</span>
                   <span className="logo-bolt" />
                 </span>
-                <span>mineetes</span>
+                <span>haramball.xyz</span>
               </div>
-              <div className={match.connected ? "live-pill" : "live-pill offline"}>
-                {match.connected ? <Wifi size={14} /> : <WifiOff size={14} />}
-                {match.source}
+              <div className={readiness.configured ? "live-pill" : "live-pill offline"}>
+                {readiness.configured ? <Wifi size={14} /> : <WifiOff size={14} />}
+                {readiness.configured ? "Live board" : "Setup"}
+              </div>
+              <div className="profile-menu-wrap">
+                <button className="profile-icon-button" onClick={() => activeProfile ? setProfileMenuOpen((value) => !value) : openProfileModal("onboarding")} type="button">
+                  {activeProfile ? initials(activeProfile.name) : <UserCircle size={20} />}
+                </button>
+                {profileMenuOpen ? (
+                  <div className="profile-dropdown">
+                    <div className="profile-dropdown-head">
+                      <strong>{activeProfile.name}</strong>
+                      <span>{activeProfile.team} - {activeProfile.style}</span>
+                    </div>
+                    <button onClick={() => openProfileModal("edit")} type="button">
+                      <UserCircle size={15} />
+                      Profile
+                    </button>
+                    <button onClick={() => openProfileModal("settings")} type="button">
+                      <Settings size={15} />
+                      Settings
+                    </button>
+                    <button onClick={() => setTheme((value) => value === "classic" ? "night" : "classic")} type="button">
+                      <Palette size={15} />
+                      Theme: {theme === "classic" ? "Classic" : "Night"}
+                    </button>
+                  </div>
+                ) : null}
               </div>
             </nav>
 
             <div className="scoreline">
-              <Team name={marketReady ? match.homeName : "mineetes"} sublabel="Possession" stat={marketReady ? `${stats.homePossession}%` : "--"} />
-              <div className="score">
-                {marketReady ? `${match.homeScore}-${match.awayScore}` : "LIVE"}
-              </div>
-              <Team name={marketReady ? match.awayName : "TxLINE"} sublabel="Shots" stat={marketReady ? stats.awayShots : "--"} align="right" />
+              <Team name="World" sublabel="Markets" stat={marketsLoading ? "..." : markets.length} />
+              <div className="score">CUP</div>
+              <Team name="Cup" sublabel="Mode" stat="Live" align="right" />
             </div>
 
             <div className="ticker">
               <div className="minute">
-                <strong>{marketReady ? `${minute}'` : "--"}</strong>
-                <span>{phaseCopy}</span>
+                <strong>{market ? `#${marketIndex + 1}` : "--"}</strong>
+                <span>{market ? market.category : "Matchday market board"}</span>
               </div>
               <div className="balance-card">
-                <span>{wallet ? "Wallet" : "Balance"}</span>
-                <strong>
-                  {wallet ? formatWallet(wallet) : `${formatMoney(balance)} USDC`}
-                </strong>
+                <span>{activeProfile ? activeProfile.team : "Join market"}</span>
+                <strong>{activeProfile ? activeProfile.name : "Create"}</strong>
               </div>
             </div>
           </header>
 
           <section className="play-stack">
-            <section className="session-strip" aria-label="Session setup">
-              <button className="wallet-button" onClick={() => setWalletChooserOpen((value) => !value)} type="button">
-                <Wallet size={17} />
-                {wallet ? `${walletName || "Wallet"} connected` : "Choose wallet"}
-              </button>
-
-              <label className="fixture-picker">
-                <span>{readiness.configured && fixturesLoading ? "Loading matches" : "TxLINE fixture"}</span>
-                <select
-                  aria-label="Select match fixture"
-                  disabled={!readiness.configured || fixturesLoading || fixtures.length === 0}
-                  onChange={(event) => {
-                    setSelectedFixtureId(event.target.value);
-                    setSecond(0);
-                  }}
-                  value={selectedFixtureId}
-                >
-                  {fixtures.map((fixture) => (
-                    <option key={fixture.fixtureId} value={fixture.fixtureId}>
-                      {fixture.label} - {fixture.status}
-                    </option>
-                  ))}
-                </select>
-              </label>
+            <section className="session-strip" aria-label="Match session setup">
               <p className="session-note">
                 {readiness.configured
-                  ? `${readiness.network} feed credentials present at service level ${readiness.serviceLevel}.`
-                  : "Live markets open after TxLINE activation."}
+                  ? "Match board is live and ready."
+                  : `Market board setup needed: ${readiness.missing.join(", ")}.`}
               </p>
               <p className="session-note secondary">
                 {wallet
-                  ? readiness.configured ? "Wallet connected for live play." : "Wallet ready for TxLINE activation."
-                  : "Choose a Solana wallet to continue."}
+                  ? `${authMode === "wallet" ? "Trading wallet" : "Linked wallet"} ${shortAddress(wallet)}`
+                  : activeProfile
+                    ? `${activeProfile.name} is ready. Connect wallet when placing a ticket.`
+                    : "Create a fan profile to join the board."}
               </p>
-              {wallet && !readiness.configured ? (
-                <button className="activate-button" disabled={activatingTxLine} onClick={activateTxLine} type="button">
-                  <ShieldCheck size={17} />
-                  {activatingTxLine ? "Activating TxLINE" : "Activate TxLINE"}
-                </button>
-              ) : null}
-              {walletChooserOpen ? (
-                <div className="wallet-chooser" aria-label="Choose Solana wallet">
-                  <strong>Choose Solana wallet</strong>
-                  {walletOptions.map((option) => (
-                    <button
-                      className={option.provider ? "wallet-option available" : "wallet-option"}
-                      key={option.name}
-                      onClick={() => option.provider ? connectWallet(option) : showToast(`${option.name} not detected`)}
-                      type="button"
-                    >
-                      <span>{option.name}</span>
-                      <small>{option.provider ? "Available" : option.hint}</small>
-                    </button>
-                  ))}
-                </div>
-              ) : null}
-              {readiness.configured && liveError ? (
-                <p className="state-note" role="status">
-                  {liveError}. Check TxLINE credentials before opening markets.
-                </p>
-              ) : null}
-              {readiness.configured && !fixturesLoading && fixtures.length === 0 ? (
-                <p className="state-note" role="status">
-                  No TxLINE fixtures returned. Markets stay closed until a live fixture is available.
-                </p>
-              ) : null}
+              <p className="session-note secondary">
+                {managedAccount
+                  ? `Market account ${shortAddress(managedAccount)}`
+                  : "Your market account appears after wallet login."}
+              </p>
+              {marketError ? <p className="state-note">{marketError}</p> : null}
             </section>
 
-            <article className={`cycle-card ${inActionWindow ? "is-action" : "is-sweat"}`}>
+            <article className="cycle-card is-action">
               <div className="phase-row">
-                <span>{inActionWindow ? "00s-30s prediction" : "30s-60s sweat"}</span>
-                <strong>{Math.max(0, remaining)}s</strong>
+                <span>{ready ? "World Cup prediction market" : "Match board pending"}</span>
+                <strong>{market?.status || "idle"}</strong>
               </div>
 
               <div className="timer-block">
                 <div className="timer-label">
-                  <span>Minute cycle</span>
-                  <b>Pool {formatMoney(pool)} USDC</b>
+                  <span>Market ID</span>
+                  <b>{market?.duelId || "--"}</b>
                 </div>
                 <div className="progress-track">
-                  <span style={{ width: `${progress}%` }} />
+                  <span style={{ width: estimate ? "72%" : pick !== null ? "42%" : "18%" }} />
                 </div>
               </div>
 
               <div className="question-block">
-                <span className="category">{question.category}</span>
-                <h1>{renderedQuestionText}</h1>
-                <p>{question.context}</p>
+                <span className="category">{market?.category || "Prediction"}</span>
+                <h1>{marketTitle}</h1>
+                <p>{marketBody}</p>
               </div>
 
               <div className="stake-block">
@@ -605,25 +593,22 @@ function App() {
                 <label className="stake-input-wrap">
                   <Coins size={16} />
                   <input
-                    disabled={controlsDisabled}
+                    disabled={!market || placing}
                     inputMode="decimal"
                     min="0.01"
-                    onChange={(event) => {
-                      const nextStake = Number(event.target.value);
-                      setStake(Number.isFinite(nextStake) ? nextStake : 0);
-                    }}
+                    onChange={(event) => setStake(event.target.value)}
                     placeholder="Type any amount"
                     step="0.01"
                     type="number"
-                    value={stake || ""}
+                    value={stake}
                   />
                   <span>USDC</span>
                 </label>
                 <div className="chip-grid">
-                  {[1, 2.5, 5, 10].map((amount) => (
+                  {["1", "2.5", "5", "10"].map((amount) => (
                     <button
                       className={stake === amount ? "chip active" : "chip"}
-                      disabled={controlsDisabled}
+                      disabled={!market || placing}
                       key={amount}
                       onClick={() => setStake(amount)}
                       type="button"
@@ -636,29 +621,33 @@ function App() {
               </div>
 
               <div className="decision-row">
-                <button
-                  className="decision yes"
-                  disabled={controlsDisabled}
-                  onClick={() => placePick("YES")}
-                  type="button"
-                >
+                <button className="decision yes" disabled={!market || estimateLoading || placing} onClick={() => quotePick(0)} type="button">
                   <Check size={22} />
-                  YES
+                  {market?.optionA || "YES"}
                 </button>
-                <button
-                  className="decision no"
-                  disabled={controlsDisabled}
-                  onClick={() => placePick("NO")}
-                  type="button"
-                >
+                <button className="decision no" disabled={!market || estimateLoading || placing} onClick={() => quotePick(1)} type="button">
                   <X size={22} />
-                  NO
+                  {market?.optionB || "NO"}
+                </button>
+              </div>
+
+              <div className="market-nav">
+                <button className="chip" disabled={markets.length < 2} onClick={previousMarket} type="button">
+                  Previous
+                </button>
+                <button className="activate-button" disabled={!estimate || placing} onClick={submitBet} type="button">
+                  <Lock size={17} />
+                  {placing ? "Locking ticket" : "Lock Ticket"}
+                </button>
+                <button className="chip" disabled={markets.length < 2} onClick={nextMarket} type="button">
+                  Next
                 </button>
               </div>
             </article>
 
             <SettlementCard settlement={settlement} />
-            <FeedCard feed={feed} />
+            <FeedCard feed={feed} portfolio={portfolio} />
+            <LeaderboardCard profiles={leaderboard} />
           </section>
         </div>
       </section>
@@ -667,12 +656,11 @@ function App() {
         <section className="intro-panel">
           <div className="eyebrow">
             <Flame size={16} />
-            World Cup live companion
+            World Cup market rush
           </div>
-          <h2>Prediction markets that settle every minute.</h2>
+          <h2>Pick the moment before the stadium does.</h2>
           <p>
-            mineetes transforms every match minute into a rapid-fire predictive arcade
-            loop built around TxLINE match events, settlement receipts, and score validation.
+            haramball.xyz is a fast World Cup market board for quick YES/NO calls, clean tickets, and live account refreshes.
           </p>
         </section>
 
@@ -688,26 +676,217 @@ function App() {
         </section>
 
         <section className="architecture-panel">
-          <h2>Prediction Markets Track</h2>
+          <h2>Matchday Flow</h2>
           <div className="rail-item">
             <BadgeDollarSign size={18} />
-            <span>Binary micro-markets with stake lock and payout ledger</span>
+            <span>Live market board loads before wallet connection</span>
           </div>
           <div className="rail-item">
             <Zap size={18} />
-            <span>
-              TxLINE {txLineNetworkConfig.network} service level {txLineNetworkConfig.serviceLevel} data backend
-            </span>
+            <span>One wallet signature opens the market account</span>
           </div>
           <div className="rail-item">
             <Trophy size={18} />
-            <span>Score validation proxy for on-chain proof integration</span>
+            <span>Preview, lock, and track every ticket clearly</span>
           </div>
         </section>
+
+        <LeaderboardCard profiles={leaderboard} wide />
       </aside>
+
+      {profileModalOpen ? (
+        <OnboardingModal
+          activeProfile={activeProfile}
+          authMode={authMode}
+          connectWallet={connectWallet}
+          connectWithWalletLink={connectWithWalletLink}
+          draft={profileDraft}
+          linkLoading={linkLoading}
+          mode={profileMode}
+          setDraft={setProfileDraft}
+          onClose={() => activeProfile && setProfileModalOpen(false)}
+          onSubmit={saveProfile}
+          wallet={wallet}
+          walletLoading={walletLoading}
+          walletOptions={walletOptions}
+        />
+      ) : null}
 
       <div className={toast ? "toast show" : "toast"}>{toast}</div>
     </main>
+  );
+}
+
+function LeaderboardCard({ profiles, wide = false }) {
+  return (
+    <article className={`leaderboard-card ${wide ? "wide" : ""}`}>
+      <h2>
+        <Trophy size={17} />
+        World Cup Leaderboard
+      </h2>
+      <div className="leaderboard-list">
+        {profiles.map((profile, index) => (
+          <div className="leaderboard-row" key={profile.id}>
+            <span className={`rank rank-${index + 1}`}>{index < 3 ? <Medal size={15} /> : index + 1}</span>
+            <div>
+              <strong>{profile.name}</strong>
+              <small>{profile.team} - {profile.style} - {profile.wins}-{profile.losses}</small>
+            </div>
+            <b>{profile.wins}W</b>
+          </div>
+        ))}
+      </div>
+    </article>
+  );
+}
+
+function OnboardingModal({
+  activeProfile,
+  authMode,
+  connectWallet,
+  connectWithWalletLink,
+  draft,
+  linkLoading,
+  mode,
+  onClose,
+  onSubmit,
+  setDraft,
+  wallet,
+  walletLoading,
+  walletOptions,
+}) {
+  const isOnboarding = mode === "onboarding";
+  const isSettings = mode === "settings";
+  const title = isOnboarding ? "Join Matchday" : isSettings ? "Account Settings" : "Edit Fan Profile";
+  const body = isOnboarding
+    ? "Create a fan profile first. Connect your wallet now or later when you are ready to lock a ticket."
+    : isSettings
+      ? "Manage your matchday identity and wallet connection."
+      : "Update how you show up on the leaderboard.";
+
+  return (
+    <div className="modal-backdrop" role="presentation">
+      <section className="onboarding-modal" role="dialog" aria-modal="true" aria-label={title}>
+        <div className="modal-hero">
+          <div>
+            <span className="category">World Cup</span>
+            <h2>{title}</h2>
+            <p>{body}</p>
+          </div>
+          <button className="profile-icon-button modal-close" disabled={isOnboarding && !activeProfile} onClick={onClose} type="button">
+            <X size={18} />
+          </button>
+        </div>
+
+        {isSettings ? (
+          <div className="settings-grid">
+            <div className="wallet-selector" aria-label="Choose wallet">
+              <strong>Choose wallet</strong>
+              {walletOptions.length ? (
+                walletOptions.map((option) => (
+                  <button
+                    className="wallet-option available"
+                    disabled={walletLoading}
+                    key={option.id}
+                    onClick={() => connectWallet(option)}
+                    type="button"
+                  >
+                    <span>{option.name}</span>
+                    <small>{walletLoading ? "Connecting" : option.hint}</small>
+                  </button>
+                ))
+              ) : (
+                <div className="wallet-empty">
+                  <strong>No browser wallet found</strong>
+                  <span>Open wallet link or install MetaMask, Rabby, Coinbase Wallet, or another EVM wallet.</span>
+                </div>
+              )}
+            </div>
+            <button className="wallet-button alt" onClick={connectWithWalletLink} disabled={linkLoading} type="button">
+              <Wallet size={17} />
+              {linkLoading ? "Opening link" : "Open wallet link"}
+            </button>
+            <div className="settings-note">
+              <strong>{activeProfile?.name || "No profile yet"}</strong>
+              <span>
+                {wallet
+                  ? `${authMode === "wallet" ? "Trading wallet" : "Linked wallet"} ${shortAddress(wallet)}`
+                  : "Use wallet link if no extension appears in this browser."}
+              </span>
+            </div>
+          </div>
+        ) : null}
+
+        {!isSettings ? (
+          <ProfileBuilder
+            activeProfile={activeProfile}
+            draft={draft}
+            setDraft={setDraft}
+            onSubmit={onSubmit}
+            submitLabel={isOnboarding ? "Enter Matchday" : "Save Profile"}
+          />
+        ) : (
+          <ProfileBuilder
+            activeProfile={activeProfile}
+            draft={draft}
+            setDraft={setDraft}
+            onSubmit={onSubmit}
+            submitLabel="Save Profile"
+          />
+        )}
+      </section>
+    </div>
+  );
+}
+
+function ProfileBuilder({ draft, setDraft, onSubmit, activeProfile, submitLabel = "Create Profile", wide = false }) {
+  return (
+    <article className={`profile-card ${wide ? "wide" : ""}`}>
+      <h2>
+        <UserPlus size={17} />
+        Create Fan Profile
+      </h2>
+      {activeProfile ? (
+        <div className="profile-preview">
+          <span>{initials(activeProfile.name)}</span>
+          <div>
+            <strong>{activeProfile.name}</strong>
+            <small>{activeProfile.team} - {activeProfile.style} - {activeProfile.wins} wins</small>
+          </div>
+        </div>
+      ) : null}
+      <form className="profile-form" onSubmit={onSubmit}>
+        <label>
+          <span>Name</span>
+          <input
+            maxLength={18}
+            onChange={(event) => setDraft((value) => ({ ...value, name: event.target.value }))}
+            placeholder="Your matchday name"
+            value={draft.name}
+          />
+        </label>
+        <label>
+          <span>Team</span>
+          <select onChange={(event) => setDraft((value) => ({ ...value, team: event.target.value }))} value={draft.team}>
+            {["USA", "Argentina", "Brazil", "England", "France", "Germany", "Japan", "Morocco"].map((team) => (
+              <option key={team}>{team}</option>
+            ))}
+          </select>
+        </label>
+        <label>
+          <span>Style</span>
+          <select onChange={(event) => setDraft((value) => ({ ...value, style: event.target.value }))} value={draft.style}>
+            {["Striker", "Midfield", "Defense", "Chaos", "Underdog"].map((style) => (
+              <option key={style}>{style}</option>
+            ))}
+          </select>
+        </label>
+        <button className="activate-button" type="submit">
+          <UserPlus size={17} />
+          {submitLabel}
+        </button>
+      </form>
+    </article>
   );
 }
 
@@ -722,79 +901,144 @@ function Team({ name, sublabel, stat, align = "left" }) {
   );
 }
 
-function getWalletOptions() {
-  const browserWindow = typeof window === "undefined" ? {} : window;
-  const solana = safeRead(() => browserWindow.solana);
-  const phantom = safeRead(() => browserWindow.phantom?.solana) || (safeRead(() => solana?.isPhantom) ? solana : null);
-  const solflare = safeRead(() => browserWindow.solflare) || (safeRead(() => solana?.isSolflare) ? solana : null);
-  const backpack =
-    safeRead(() => browserWindow.backpack?.solana) ||
-    safeRead(() => browserWindow.backpack) ||
-    (safeRead(() => solana?.isBackpack) ? solana : null);
-  const metamaskSolana =
-    safeRead(() => browserWindow.ethereum?.solana) ||
-    safeRead(() => browserWindow.ethereum?.providers?.find?.((provider) => provider?.isMetaMask && provider?.solana)?.solana) ||
-    (safeRead(() => solana?.isMetaMask) ? solana : null);
-
-  return [
-    {
-      name: "Phantom",
-      provider: phantom,
-      hint: "Install Phantom",
-    },
-    {
-      name: "Solflare",
-      provider: solflare,
-      hint: "Install Solflare",
-    },
-    {
-      name: "Backpack",
-      provider: backpack,
-      hint: "Install Backpack",
-    },
-    {
-      name: "MetaMask Solana",
-      provider: metamaskSolana,
-      hint: "Open MetaMask Solana account",
-    },
-  ];
+function SettlementCard({ settlement }) {
+  return (
+    <article className="settlement-card">
+      <h2>Match Ticket</h2>
+      <div className="result">
+        <span className={`result-icon ${settlement.tone}`}>{settlement.icon}</span>
+        <div>
+          <strong>{settlement.title}</strong>
+          <p>{settlement.body}</p>
+        </div>
+        <b>{settlement.payout}</b>
+      </div>
+      {settlement.receipt ? (
+        <details className="receipt-proof">
+          <summary>
+            <ShieldCheck size={16} />
+            <span>{settlement.receipt.outcome} on market {settlement.receipt.duelId}</span>
+            <ChevronDown size={16} />
+          </summary>
+          <div className="receipt-grid" aria-label="Match ticket receipt">
+            {Object.entries(settlement.receipt).map(([key, value]) => (
+              <div className={key === "market" ? "receipt-rule" : ""} key={key}>
+                <span>{receiptLabel(key)}</span>
+                <strong>{String(value)}</strong>
+              </div>
+            ))}
+          </div>
+        </details>
+      ) : null}
+    </article>
+  );
 }
 
-async function connectWalletProvider(provider) {
-  const response = provider.connect
-    ? await provider.connect({ onlyIfTrusted: false })
-    : await provider.request({ method: "connect" });
-  const publicKey = publicKeyFrom(response) || publicKeyFrom(provider);
+function FeedCard({ feed, portfolio }) {
+  return (
+    <article className="feed-card">
+      <h2>Match Activity</h2>
+      <div className="feed-list">
+        {feed.length === 0 ? (
+          <div className="feed-item empty">
+            <strong>--</strong>
+            <span>Waiting for match market activity</span>
+          </div>
+        ) : (
+          feed.map((item, index) => (
+            <div className="feed-item" key={`${item.minute}-${item.label}-${index}`}>
+              <strong>{item.minute}</strong>
+              <span>{item.label}</span>
+            </div>
+          ))
+        )}
+        {portfolio ? (
+          <div className="feed-item">
+            <strong>acct</strong>
+            <span>Account refreshed</span>
+          </div>
+        ) : null}
+      </div>
+    </article>
+  );
+}
 
-  if (!publicKey) {
-    throw new Error("Wallet connected but did not return a Solana address");
+async function discoverEvmWalletOptions() {
+  const browserWindow = typeof window === "undefined" ? {} : window;
+  const announced = [];
+
+  const onProvider = (event) => {
+    if (event?.detail?.provider) announced.push(event.detail);
+  };
+
+  if (browserWindow.addEventListener && browserWindow.dispatchEvent) {
+    browserWindow.addEventListener("eip6963:announceProvider", onProvider);
+    browserWindow.dispatchEvent(new Event("eip6963:requestProvider"));
+    await new Promise((resolve) => window.setTimeout(resolve, 250));
+    browserWindow.removeEventListener("eip6963:announceProvider", onProvider);
   }
 
-  return {
-    address: publicKey.toString(),
-    provider: {
-      ...provider,
-      publicKey,
-      signTransaction: provider.signTransaction?.bind(provider),
-      signAllTransactions: provider.signAllTransactions?.bind(provider),
-      signMessage: provider.signMessage?.bind(provider),
-      request: provider.request?.bind(provider),
-    },
-  };
+  const ethereum = safeRead(() => browserWindow.ethereum);
+  const legacyProviders = Array.isArray(ethereum?.providers) && ethereum.providers.length
+    ? ethereum.providers
+    : ethereum
+      ? [ethereum]
+      : [];
+  const entries = [
+    ...announced.map((detail, index) => ({
+      id: detail.info?.uuid || `eip6963-${index}`,
+      name: detail.info?.name || evmWalletName(detail.provider, index),
+      provider: detail.provider,
+      icon: detail.info?.icon,
+      source: "eip6963",
+    })),
+    ...legacyProviders.map((provider, index) => ({
+      id: `legacy-${index}-${evmWalletName(provider, index)}`,
+      name: evmWalletName(provider, index),
+      provider,
+      source: "legacy",
+    })),
+  ];
+  const seen = new Set();
+
+  return entries
+    .map((entry, index) => {
+      const key = `${entry.name}-${providerFingerprint(entry.provider)}`;
+      if (seen.has(key)) return null;
+      if (entry.source === "legacy" && entries.some((item) => item.source === "eip6963" && item.name === entry.name)) return null;
+      seen.add(key);
+      const name = entry.name;
+      return {
+        id: entry.id || `${name}-${index}`,
+        name,
+        provider: entry.provider,
+        hint: entry.source === "eip6963" ? "Detected" : entry.provider?.isConnected?.() ? "Available" : "Detected",
+      };
+    })
+    .filter(Boolean);
 }
 
-function canConnectWallet(provider) {
-  return Boolean(provider && (provider.connect || provider.request));
+function evmWalletName(provider, index) {
+  if (provider?.isRabby) return "Rabby";
+  if (provider?.isCoinbaseWallet) return "Coinbase Wallet";
+  if (provider?.isMetaMask && provider?.isBraveWallet) return "Brave Wallet";
+  if (provider?.isMetaMask) return "MetaMask";
+  if (provider?.isTrust) return "Trust Wallet";
+  if (provider?.isFrame) return "Frame";
+  if (provider?.isOKExWallet || provider?.isOkxWallet) return "OKX Wallet";
+  return index === 0 ? "Browser Wallet" : `Wallet ${index + 1}`;
 }
 
-function publicKeyFrom(value) {
-  if (!value) return null;
-  if (value.publicKey) return value.publicKey;
-  if (value.account?.publicKey) return value.account.publicKey;
-  if (value.accounts?.[0]?.publicKey) return value.accounts[0].publicKey;
-  if (value.accounts?.[0]?.address) return value.accounts[0].address;
-  if (Array.isArray(value) && value[0]?.publicKey) return value[0].publicKey;
-  return null;
+function providerFingerprint(provider) {
+  return [
+    provider?.isMetaMask ? "metamask" : "",
+    provider?.isRabby ? "rabby" : "",
+    provider?.isCoinbaseWallet ? "coinbase" : "",
+    provider?.isTrust ? "trust" : "",
+    provider?.isBraveWallet ? "brave" : "",
+    provider?.isFrame ? "frame" : "",
+    provider?.isOKExWallet || provider?.isOkxWallet ? "okx" : "",
+  ].filter(Boolean).join("-") || "generic";
 }
 
 function walletErrorMessage(error) {
@@ -816,91 +1060,57 @@ function safeRead(read) {
   }
 }
 
-function SettlementCard({ settlement }) {
+function receiptLabel(key) {
   return (
-    <article className="settlement-card">
-      <h2>Instant Settlement</h2>
-      <div className="result">
-        <span className={`result-icon ${settlement.tone}`}>{settlement.icon}</span>
-        <div>
-          <strong>{settlement.title}</strong>
-          <p>{settlement.body}</p>
-        </div>
-        <b>{settlement.payout}</b>
-      </div>
-      {settlement.receipt ? (
-        <details className="receipt-proof">
-          <summary>
-            <ShieldCheck size={16} />
-            <span>
-              {settlement.receipt.answer} by rule - minute {settlement.receipt.targetMinute}'
-            </span>
-            <ChevronDown size={16} />
-          </summary>
-          <div className="receipt-grid" aria-label="Settlement receipt">
-            <div>
-              <span>Answer</span>
-              <strong>{settlement.receipt.answer}</strong>
-            </div>
-            <div>
-              <span>Seq</span>
-              <strong>{settlement.receipt.sequence}</strong>
-            </div>
-            <div>
-              <span>Locked Seq</span>
-              <strong>{settlement.receipt.lockedSequence}</strong>
-            </div>
-            <div>
-              <span>Events</span>
-              <strong>{settlement.receipt.eventCount}</strong>
-            </div>
-            <div>
-              <span>Source</span>
-              <strong>{settlement.receipt.source}</strong>
-            </div>
-            <div>
-              <span>Fixture</span>
-              <strong>{settlement.receipt.fixtureId}</strong>
-            </div>
-            <div>
-              <span>Locked Fixture</span>
-              <strong>{settlement.receipt.lockedFixtureId}</strong>
-            </div>
-            <div className="receipt-rule">
-              <span>Rule</span>
-              <strong>{settlement.receipt.rule}</strong>
-            </div>
-          </div>
-        </details>
-      ) : null}
-    </article>
+    {
+      duelId: "market id",
+      quoteId: "preview id",
+      idempotencyKey: "ticket id",
+    }[key] || key
   );
 }
 
-function FeedCard({ feed }) {
-  return (
-    <article className="feed-card">
-      <h2>Live Match Feed</h2>
-      <div className="feed-list">
-        {feed.length === 0 ? (
-          <div className="feed-item empty">
-            <strong>--:--</strong>
-            <span>Waiting for TxLINE events</span>
-          </div>
-        ) : (
-          feed
-          .slice(-5)
-          .reverse()
-          .map((item, index) => (
-            <div className="feed-item" key={`${item.minute}-${item.label}-${index}`}>
-              <strong>{item.minute}</strong>
-              <span>{item.label}</span>
-            </div>
-          ))
-        )}
-      </div>
-    </article>
-  );
+function loadProfiles() {
+  try {
+    const stored = JSON.parse(localStorage.getItem(PROFILE_STORAGE_KEY) || "null");
+    return Array.isArray(stored) && stored.length ? stored.map(normalizeProfile) : DEFAULT_PROFILES;
+  } catch {
+    return DEFAULT_PROFILES;
+  }
+}
+
+function normalizeProfile(profile = {}) {
+  const [recordWins, recordLosses] = String(profile.record || "").split("-");
+  const wins = numberOr(profile.wins, recordWins, 0);
+  const losses = numberOr(profile.losses, recordLosses, 0);
+
+  return {
+    id: profile.id,
+    name: profile.name,
+    team: profile.team || "USA",
+    style: profile.style || "Striker",
+    wins,
+    losses,
+    points: numberOr(profile.points, undefined, 1200 + wins * 80 - losses * 20),
+    streak: numberOr(profile.streak, undefined, 0),
+  };
+}
+
+function numberOr(value, fallbackValue, finalFallback) {
+  const parsed = Number(value);
+  if (Number.isFinite(parsed)) return parsed;
+  const fallback = Number(fallbackValue);
+  return Number.isFinite(fallback) ? fallback : finalFallback;
+}
+
+function initials(name) {
+  return String(name || "?")
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0])
+    .join("")
+    .toUpperCase();
 }
 
 createRoot(document.getElementById("root")).render(<App />);

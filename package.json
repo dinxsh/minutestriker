@@ -1,5 +1,5 @@
 {
-  "name": "mineetes",
+  "name": "haramball.xyz",
   "private": true,
   "version": "0.1.0",
   "type": "module",
@@ -11,6 +11,7 @@
     "txline:setup": "node scripts/txline-worldcup-setup.mjs"
   },
   "dependencies": {
+    "@bento.fun/sdk": "^0.7.0",
     "@coral-xyz/anchor": "^0.32.1",
     "@solana/spl-token": "^0.4.12",
     "@solana/web3.js": "^1.95.5",

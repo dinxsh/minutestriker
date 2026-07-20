@@ -1,37 +1,46 @@
-# mineetes Design System
+# haramball.xyz Design System
 
 ## Product Feel
-mineetes is a mobile-first live football arcade. The first thing users should notice is the current minute prediction card, then the lock timer, then settlement/proof context.
+
+haramball.xyz is a World Cup market terminal. The first thing users should notice is the match market card, then the YES/NO ticket controls, then the leaderboard/profile layer.
 
 ## Visual Tokens
-- Canvas: deep carbon `#121214`
-- Panel: comic paper `#f8f4df`
+
+- Canvas: pitch green / deep stadium night
+- Panel: matchday ticket paper `#fff8dc`
 - Ink/borders: near-black `#050507`
-- YES: cyber neon pink `#ff2e93`
-- NO: electric lime `#00ffa3`
-- Live/state: halftone cyan `#00e5ff`
-- Proof/warnings: arcade yellow `#ffe45f`
-- Sweat state: orange `#ff8a2a`
+- YES: tournament red
+- NO: pitch green
+- Live/state: scoreboard cyan
+- Warnings: trophy yellow
+- Pending/finality: matchday orange
 
 ## Component Rules
-- Use 4px black borders and offset shadows for primary controls.
-- Keep the prediction card dominant; setup controls must be compact.
+
+- Keep the market card dominant.
+- Onboarding belongs in a modal for fresh users.
+- Returning users manage profile, settings, and theme from the top-right profile icon.
 - Buttons must be at least 44px tall on touch screens.
 - YES and NO are the only large twin action buttons in the core loop.
-- Proof receipts start summary-first; technical detail belongs in disclosure.
-- Fixture names may be long, so selects and proof fields must truncate or wrap intentionally.
+- Always preview before placing a bet.
+- Receipts start summary-first; market id, preview id, ticket id, and account detail belong in disclosure.
+- Show the signing wallet and market account separately.
 
 ## Required States
-- Loading fixtures: setup strip says "Loading matches" and disables fixture select.
-- No fixtures: show a clear closed-market state until TxLINE returns a live fixture.
-- TxLINE auth/feed error: show visible configuration or feed failure messages.
-- Wallet unavailable: toast instructs user to install a Solana wallet.
-- Wallet connected: label wallet as identity only unless a real vault is connected.
-- Settlement pending: show locked state from 30s to 60s.
-- Settlement complete: show result plus proof summary.
+
+- Loading markets: market card says "Loading World Cup markets..."
+- No markets: show a closed match board state.
+- Missing Builder key: readiness strip names the missing backend env.
+- Fresh user: show the Join Matchday modal.
+- Profile exists: show top-right avatar dropdown.
+- Wallet unavailable: toast asks for an EVM wallet.
+- Wallet connected: show signer address and market account when returned.
+- Preview pending: disable repeat preview/place controls.
+- Bet accepted: show pending finality and poll portfolio.
 
 ## Accessibility
+
 - Interactive controls need visible focus states.
-- Use semantic buttons/selects/details for keyboard support.
+- Use semantic buttons/forms/details for keyboard support.
 - Maintain 44px touch targets.
 - State messages should use visible text, not color alone.

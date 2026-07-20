@@ -1,61 +1,51 @@
-# mineetes Superteam Submission Checklist
+# haramball.xyz Bento Integration Notes
 
-Track: Prediction Markets and Settlement by TxODDS
+haramball.xyz is scoped as a World Cup prediction-market client designed to bring more users into Bento markets through a clean matchday experience.
 
-Source listing: https://superteam.fun/earn/listing/prediction-markets-and-settlement
+## Product Mapping
 
-## Requirement Mapping
-
-| Track expectation | mineetes coverage |
+| Bento surface | haramball.xyz coverage |
 | --- | --- |
-| Prediction markets | 60-second binary micro-markets with YES/NO selection, stake lock, frozen pool, and payout state. |
-| Settlement | Deterministic settlement receipts include answer, target minute, fixture, sequence, source, event count, and rule. |
-| TxODDS/TxLINE live data | Server-side TxLINE API routes fetch fixtures, score snapshots, and score updates without exposing secrets. |
-| Oracle tooling | `/api/readiness`, `/api/fixtures`, `/api/live`, and `/api/score-validation` isolate TxLINE access behind backend routes. |
-| On-chain proof integrations | `/api/score-validation` proxies TxLINE legacy `statKey` and current V2 `statKeys` proof endpoints for future Solana validation. |
-| Frontend | Mobile-first React/Vite match companion UI with fixture selection, wallet identity, staking, timer, settlement, and proof disclosure. |
-| Backend | Vercel serverless API routes keep `TXLINE_JWT` and `TXLINE_API_TOKEN` server-side. |
-| Blockchain | Wallet identity is integrated; backend exposes TxLINE score-validation proof data. Treasury custody must be connected before accepting real funds. |
-| Mobile | Primary layout is a phone-frame responsive experience with touch-sized controls. |
-| Design | Comic/arcade visual system documented in `DESIGN.md`, with visible state and accessibility rules. |
+| Public market catalog | `/api/bento-markets` powers the primary card feed. |
+| Market detail | `/api/bento-market` reads by `duelId`, not database row id. |
+| Wallet login | Browser wallet signs Bento's EOA login message. |
+| Managed account | UI separates signing wallet from market account. |
+| Quote flow | `/api/bento-estimate` previews shares/slippage before placement. |
+| Bet placement | `/api/bento-place-bet` submits the previewed position with idempotency. |
+| Reconciliation | `/api/bento-portfolio` polls account details and positions after acceptance. |
+| Growth loop | Profiles, leaderboard, match tickets, and onboarding make the market board feel social and repeatable. |
 
 ## Honest Scope Boundary
 
-mineetes ships the live-data and settlement-proof path for the hackathon build. Real-money custody, compliance, KYC/geofencing, and audited Solana escrow must be completed before public wagering launch.
+The app is wired for Bento testnet/backend integration. Real-money launch still depends on account funding, market eligibility, compliance/geofencing, and production API access.
 
 ## Production Flow
 
-1. Open the app on mobile or desktop.
-2. Confirm TxLINE readiness chips show configured backend state and a successful live poll.
-3. Select a fixture.
-4. Enter any positive stake within the available balance.
-5. Lock YES/NO during the 00s-30s market-open window.
-6. Watch the 30s-60s frozen market window.
-7. Inspect the settlement receipt and proof details.
+1. Open haramball.xyz.
+2. Create or update a fan profile.
+3. Confirm backend readiness is configured.
+4. Browse public markets.
+5. Connect an EVM wallet.
+6. Select YES/NO.
+7. Preview the stake.
+8. Place the bet.
+9. Inspect the ticket and portfolio reconciliation state.
 
 ## Required Environment Variables
 
-See `BACKEND.md` for exact env setup and where to get each TxLINE value.
-
-Minimum live TxLINE backend envs:
-
 ```env
-TXLINE_NETWORK=mainnet
-TXLINE_ORIGIN=https://txline.txodds.com
-TXLINE_JWT=...
-TXLINE_API_TOKEN=...
-TXLINE_SERVICE_LEVEL=12
+BENTO_URL=https://internal-server.bento.fun
+BENTO_BUILDER_API_KEY=...
+BUILDER_API_KEY=...
+PARLAY_TOURNMENT_URL=https://bento-fun-tournaments-backend-3nku.onrender.com
 ```
 
-Devnet validation support:
+`BENTO_BUILDER_API_KEY` is the official SDK env name. `BUILDER_API_KEY` is accepted as a hackathon-note alias. `PARLAY_TOURNMENT_URL` intentionally uses the spelling from the Bento hackathon repo.
 
-```env
-TXLINE_NETWORK=devnet
-TXLINE_ORIGIN=https://txline-dev.txodds.com
-TXLINE_SERVICE_LEVEL=1
-ANCHOR_PROVIDER_URL=https://api.devnet.solana.com
-TOKEN_MINT_ADDRESS=4Zao8ocPhmMgq7PdsYWyxvqySMGx7xb9cMftPMkEokRG
-```
+## Submission Reference
+
+- Repo: https://github.com/Bentodotfun/build-on-bento
+- Required form: https://forms.gle/UiJB7fVNCpwvnVLa7
 
 ## Verification
 
