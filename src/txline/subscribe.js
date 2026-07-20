@@ -17,7 +17,7 @@ export async function subscribeAndActivateWorldCup({ provider, readiness, league
   }
 
   const walletPublicKey = new PublicKey(provider.publicKey.toString());
-  const connection = new web3.Connection(readiness.rpcUrl, "confirmed");
+  const connection = await firstHealthyConnection(rpcUrlsFrom(readiness));
   const walletAdapter = {
     publicKey: walletPublicKey,
     signTransaction: provider.signTransaction.bind(provider),
@@ -83,7 +83,7 @@ export async function subscribeAndActivateWorldCup({ provider, readiness, league
 }
 
 async function ensureAssociatedTokenAccount({ connection, provider, owner, tokenMint, tokenAccount }) {
-  const existing = await connection.getAccountInfo(tokenAccount, "confirmed");
+  const existing = await rpcCall(connection, (activeConnection) => activeConnection.getAccountInfo(tokenAccount, "confirmed"));
   if (existing) return;
 
   const transaction = new Transaction().add(
@@ -101,13 +101,72 @@ async function ensureAssociatedTokenAccount({ connection, provider, owner, token
 }
 
 async function signAndSendTransaction({ connection, provider, transaction, feePayer }) {
-  const latestBlockhash = await connection.getLatestBlockhash("confirmed");
+  const latestBlockhash = await rpcCall(connection, (activeConnection) => activeConnection.getLatestBlockhash("confirmed"));
   transaction.feePayer = feePayer;
   transaction.recentBlockhash = latestBlockhash.blockhash;
   const signed = await provider.signTransaction(transaction);
-  const signature = await connection.sendRawTransaction(signed.serialize());
-  await connection.confirmTransaction({ signature, ...latestBlockhash }, "confirmed");
+  const signature = await rpcCall(connection, (activeConnection) => activeConnection.sendRawTransaction(signed.serialize()));
+  await rpcCall(connection, (activeConnection) => activeConnection.confirmTransaction({ signature, ...latestBlockhash }, "confirmed"));
   return signature;
+}
+
+async function firstHealthyConnection(rpcUrls) {
+  const connection = fallbackConnection(rpcUrls);
+  await rpcCall(connection, (activeConnection) => activeConnection.getLatestBlockhash("confirmed"));
+  return connection;
+}
+
+function fallbackConnection(rpcUrls) {
+  const endpoints = rpcUrls.map((url) => ({
+    url,
+    connection: new web3.Connection(url, "confirmed"),
+  }));
+  let activeIndex = 0;
+
+  return {
+    async call(task) {
+      const failures = [];
+
+      for (let attempt = 0; attempt < endpoints.length; attempt += 1) {
+        const index = (activeIndex + attempt) % endpoints.length;
+        const endpoint = endpoints[index];
+
+        try {
+          const result = await task(endpoint.connection);
+          activeIndex = index;
+          return result;
+        } catch (error) {
+          failures.push(`${hostFrom(endpoint.url)}: ${shortError(error)}`);
+        }
+      }
+
+      throw new Error(`Solana RPC unavailable (${failures.join("; ")})`);
+    },
+  };
+}
+
+function rpcCall(connection, task) {
+  return connection.call(task);
+}
+
+function rpcUrlsFrom(readiness) {
+  const urls = Array.isArray(readiness.rpcUrls) && readiness.rpcUrls.length
+    ? readiness.rpcUrls
+    : [readiness.rpcUrl];
+  return [...new Set(urls.filter(Boolean))];
+}
+
+function hostFrom(url) {
+  try {
+    return new URL(url).host;
+  } catch {
+    return url;
+  }
+}
+
+function shortError(error) {
+  const message = String(error?.message || error || "request failed");
+  return message.replace(/\s+/g, " ").slice(0, 120);
 }
 
 async function signActivationMessage(provider, message) {

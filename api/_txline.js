@@ -6,13 +6,16 @@ const DEFAULT_MAINNET_ORIGIN = "https://txline.txodds.com";
 const DEFAULT_DEVNET_ORIGIN = "https://txline-dev.txodds.com";
 const NETWORKS = {
   mainnet: {
-    rpcUrl: "https://api.mainnet-beta.solana.com",
+    rpcUrls: [
+      "https://solana-rpc.publicnode.com",
+      "https://api.mainnet-beta.solana.com",
+    ],
     programId: "9ExbZjAapQww1vfcisDmrngPinHTEfpjYRWMunJgcKaA",
     txlTokenMint: "Zhw9TVKp68a1QrftncMSd6ELXKDtpVMNuMGr1jNwdeL",
     defaultOrigin: DEFAULT_MAINNET_ORIGIN,
   },
   devnet: {
-    rpcUrl: "https://api.devnet.solana.com",
+    rpcUrls: ["https://api.devnet.solana.com"],
     programId: "6pW64gN1s2uqjHkn1unFeEjAwJkPGHoppGvS715wyP2J",
     txlTokenMint: "4Zao8ocPhmMgq7PdsYWyxvqySMGx7xb9cMftPMkEokRG",
     defaultOrigin: DEFAULT_DEVNET_ORIGIN,
@@ -29,13 +32,15 @@ export function getServerConfig() {
   const apiToken = process.env.TXLINE_API_TOKEN;
   const serviceLevel = process.env.TXLINE_SERVICE_LEVEL || "12";
   const fixtureId = process.env.TXLINE_FIXTURE_ID;
+  const rpcUrls = rpcUrlsFrom(process.env.ANCHOR_PROVIDER_URL, networkConfig.rpcUrls);
 
   return {
     network,
     origin,
     apiBaseUrl: `${origin}/api`,
     guestAuthUrl: `${origin}/auth/guest/start`,
-    rpcUrl: process.env.ANCHOR_PROVIDER_URL || networkConfig.rpcUrl,
+    rpcUrl: rpcUrls[0],
+    rpcUrls,
     programId: networkConfig.programId,
     txlTokenMint: process.env.TOKEN_MINT_ADDRESS || networkConfig.txlTokenMint,
     serviceLevel,
@@ -61,6 +66,7 @@ export function readinessPayload() {
     apiBaseUrl: config.apiBaseUrl,
     guestAuthUrl: config.guestAuthUrl,
     rpcUrl: config.rpcUrl,
+    rpcUrls: config.rpcUrls,
     programId: config.programId,
     txlTokenMint: config.txlTokenMint,
     serviceLevel: config.serviceLevel,
@@ -297,6 +303,14 @@ function normaliseLeagues(leagues) {
   if (Array.isArray(leagues)) return leagues.map(String).filter(Boolean);
   if (!leagues) return [];
   return String(leagues).split(",").map((league) => league.trim()).filter(Boolean);
+}
+
+function rpcUrlsFrom(value, defaults) {
+  const configured = String(value || "")
+    .split(",")
+    .map((url) => url.trim())
+    .filter(Boolean);
+  return configured.length ? configured : defaults;
 }
 
 function httpError(statusCode, message, expose = statusCode < 500) {
