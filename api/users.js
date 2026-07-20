@@ -1,6 +1,5 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import { readJsonBody, sendJson } from "./_bento.js";
 
 const USERS_FILE = path.join(process.cwd(), "data", "users.json");
 const IS_VERCEL = process.env.VERCEL === "1";
@@ -147,4 +146,26 @@ function slugFrom(value) {
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-|-$/g, "");
+}
+
+function sendJson(response, statusCode, payload) {
+  response.statusCode = statusCode;
+  response.setHeader("Content-Type", "application/json; charset=utf-8");
+  response.setHeader("Cache-Control", "no-store");
+  response.end(JSON.stringify(payload));
+}
+
+async function readJsonBody(request) {
+  const chunks = [];
+  for await (const chunk of request) chunks.push(chunk);
+  const raw = Buffer.concat(chunks).toString("utf8");
+  if (!raw.trim()) return {};
+
+  try {
+    return JSON.parse(raw);
+  } catch {
+    const error = new Error("Request body must be valid JSON");
+    error.statusCode = 400;
+    throw error;
+  }
 }
