@@ -54,6 +54,7 @@ const CURRENT_TOURNAMENT_STORAGE_KEY = "haramball-current-tournament-id";
 const USE_TEMPORARY_BETS = true;
 const ROUND_SECONDS = 5;
 const LOCKOUT_SECONDS = Math.ceil(ROUND_SECONDS * 0.15);
+const TEMPORARY_FALLBACK_FIXTURE = { home: "Argentina", away: "Brazil", label: "Argentina vs Brazil" };
 const TEMPORARY_BETS = [
   {
     id: "temp-counter-attack-goal",
@@ -63,7 +64,6 @@ const TEMPORARY_BETS = [
     status: "temporary",
     optionA: "YES",
     optionB: "NO",
-    raw: { home: "Counter", away: "Goal" },
   },
   {
     id: "temp-freekick-target",
@@ -73,7 +73,6 @@ const TEMPORARY_BETS = [
     status: "temporary",
     optionA: "YES",
     optionB: "NO",
-    raw: { home: "Freekick", away: "Target" },
   },
   {
     id: "temp-counter-attack-deep",
@@ -83,7 +82,6 @@ const TEMPORARY_BETS = [
     status: "temporary",
     optionA: "YES",
     optionB: "NO",
-    raw: { home: "Counter", away: "Dee" },
   },
   {
     id: "temp-penalty-goal",
@@ -93,7 +91,6 @@ const TEMPORARY_BETS = [
     status: "temporary",
     optionA: "YES",
     optionB: "NO",
-    raw: { home: "Penalty", away: "Goal" },
   },
 ];
 const TOKEN_OPTIONS = [
@@ -292,10 +289,19 @@ function App() {
   useEffect(() => {
     let alive = true;
     if (USE_TEMPORARY_BETS) {
-      setMarkets(TEMPORARY_BETS);
+      setMarkets(withTemporaryFixture(TEMPORARY_BETS, TEMPORARY_FALLBACK_FIXTURE));
       setMarketError("");
       setMarketsLoading(false);
       setReadiness((value) => ({ ...value, configured: true, missing: [] }));
+      fetchBentoMarkets({ page: 1, limit: 20 })
+        .then((nextMarkets) => {
+          if (!alive) return;
+          const fixtureMarket = nextMarkets.find((item) => item.duelId) || nextMarkets[0];
+          setMarkets(withTemporaryFixture(TEMPORARY_BETS, fixtureFromMarket(fixtureMarket)));
+        })
+        .catch(() => {
+          if (alive) setMarkets(withTemporaryFixture(TEMPORARY_BETS, TEMPORARY_FALLBACK_FIXTURE));
+        });
       return () => {
         alive = false;
       };
@@ -1777,6 +1783,19 @@ function buildActivityCells(feed) {
     cells[cellIndex] = Math.min(4, cells[cellIndex] + 1);
   }
   return cells;
+}
+
+function withTemporaryFixture(markets, fixture) {
+  const safeFixture = fixture?.home && fixture?.away ? fixture : TEMPORARY_FALLBACK_FIXTURE;
+  return markets.map((market) => ({
+    ...market,
+    raw: {
+      ...(market.raw || {}),
+      home: safeFixture.home,
+      away: safeFixture.away,
+      fixtureLabel: safeFixture.label,
+    },
+  }));
 }
 
 function fixtureFromMarket(market) {
