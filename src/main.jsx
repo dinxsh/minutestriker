@@ -51,8 +51,51 @@ const ACTIVITY_STORAGE_KEY = "haramball-activity-feed";
 const THEME_STORAGE_KEY = "haramball-theme";
 const TOURNAMENT_STORAGE_KEY = "haramball-tournaments";
 const CURRENT_TOURNAMENT_STORAGE_KEY = "haramball-current-tournament-id";
-const ROUND_SECONDS = 15;
+const USE_TEMPORARY_BETS = true;
+const ROUND_SECONDS = 5;
 const LOCKOUT_SECONDS = Math.ceil(ROUND_SECONDS * 0.15);
+const TEMPORARY_BETS = [
+  {
+    id: "temp-counter-attack-goal",
+    duelId: "temp-counter-attack-goal",
+    title: "Will this counter attack turn into a goal?",
+    category: "Live match",
+    status: "temporary",
+    optionA: "YES",
+    optionB: "NO",
+    raw: { home: "Counter", away: "Goal" },
+  },
+  {
+    id: "temp-freekick-target",
+    duelId: "temp-freekick-target",
+    title: "Will the freekick hit the target?",
+    category: "Live match",
+    status: "temporary",
+    optionA: "YES",
+    optionB: "NO",
+    raw: { home: "Freekick", away: "Target" },
+  },
+  {
+    id: "temp-counter-attack-deep",
+    duelId: "temp-counter-attack-deep",
+    title: "Will this counter attack at least enter the opponent dee?",
+    category: "Live match",
+    status: "temporary",
+    optionA: "YES",
+    optionB: "NO",
+    raw: { home: "Counter", away: "Dee" },
+  },
+  {
+    id: "temp-penalty-goal",
+    duelId: "temp-penalty-goal",
+    title: "Will this penalty be a goal?",
+    category: "Live match",
+    status: "temporary",
+    optionA: "YES",
+    optionB: "NO",
+    raw: { home: "Penalty", away: "Goal" },
+  },
+];
 const TOKEN_OPTIONS = [
   { symbol: "USDC", name: "USD Coin", network: "Base", icon: "$" },
   { symbol: "USDT", name: "Tether USD", network: "Ethereum", icon: "T" },
@@ -191,7 +234,11 @@ function App() {
 
   useEffect(() => {
     const timer = window.setInterval(() => {
-      setElapsedSeconds(Math.floor(Date.now() / 1000) % ROUND_SECONDS);
+      const nowSeconds = Math.floor(Date.now() / 1000);
+      setElapsedSeconds(nowSeconds % ROUND_SECONDS);
+      if (USE_TEMPORARY_BETS) {
+        setMarketIndex(Math.floor(nowSeconds / ROUND_SECONDS) % TEMPORARY_BETS.length);
+      }
     }, 250);
     return () => window.clearInterval(timer);
   }, []);
@@ -244,6 +291,16 @@ function App() {
 
   useEffect(() => {
     let alive = true;
+    if (USE_TEMPORARY_BETS) {
+      setMarkets(TEMPORARY_BETS);
+      setMarketError("");
+      setMarketsLoading(false);
+      setReadiness((value) => ({ ...value, configured: true, missing: [] }));
+      return () => {
+        alive = false;
+      };
+    }
+
     if (!readiness.configured) {
       setMarkets([]);
       setMarketError("");
@@ -1723,6 +1780,14 @@ function buildActivityCells(feed) {
 }
 
 function fixtureFromMarket(market) {
+  if (market?.raw?.home || market?.raw?.away) {
+    return {
+      home: market.raw.home || "Live",
+      away: market.raw.away || "Market",
+      label: `${market.raw.home || "Live"} vs ${market.raw.away || "Market"}`,
+    };
+  }
+
   const title = String(market?.title || "");
   const versus = title.match(/^(.+?)\s+(?:vs\.?|v\.?|beat|defeat)\s+(.+?)(?:\s+in\s+|\?|$)/i);
   if (versus) {
